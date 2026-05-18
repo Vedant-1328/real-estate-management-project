@@ -1,0 +1,46 @@
+import { Router } from 'express';
+import authRoutes from './authRoutes.js';
+import companyRoutes from './companyRoutes.js';
+import dashboardRoutes from './dashboardRoutes.js';
+import expenseTypeRoutes from './expenseTypeRoutes.js';
+import jobTypeRoutes from './jobTypeRoutes.js';
+import siteRoutes from './siteRoutes.js';
+import driverRoutes from './driverRoutes.js';
+import employeeRoutes from './employeeRoutes.js';
+import jobAssignmentRoutes from './jobAssignmentRoutes.js';
+import eodRoutes from './eodRoutes.js';
+import dailyExpenseRoutes from './dailyExpenseRoutes.js';
+import invoiceRoutes from './invoiceRoutes.js';
+import paymentRoutes from './paymentRoutes.js';
+import vehicleRoutes from './vehicleRoutes.js';
+import driverAdvanceRoutes from './driverAdvanceRoutes.js';
+import employeeAdvanceRoutes from './employeeAdvanceRoutes.js';
+import reportRoutes from './reportRoutes.js';
+import userRoutes from './userRoutes.js';
+import roleRoutes from './roleRoutes.js';
+import auditLogRoutes from './auditLogRoutes.js';
+
+const router = Router();
+
+router.use('/auth', authRoutes);
+router.use('/dashboard', dashboardRoutes);
+router.use('/companies', companyRoutes);
+router.use('/job-types', jobTypeRoutes);
+router.use('/expense-types', expenseTypeRoutes);
+router.use('/sites', siteRoutes);
+router.use('/vehicles', vehicleRoutes);
+router.use('/drivers', driverRoutes);
+router.use('/employees', employeeRoutes);
+router.use('/job-assignments', jobAssignmentRoutes);
+router.use('/eod-entries', eodRoutes);
+router.use('/daily-expenses', dailyExpenseRoutes);
+router.use('/invoices', invoiceRoutes);
+router.use('/payments', paymentRoutes);
+router.use('/driver-advances', driverAdvanceRoutes);
+router.use('/employee-advances', employeeAdvanceRoutes);
+router.use('/reports', reportRoutes);
+router.use('/users', userRoutes);
+router.use('/roles', roleRoutes);
+router.use('/audit-logs', auditLogRoutes);
+
+export default router;
