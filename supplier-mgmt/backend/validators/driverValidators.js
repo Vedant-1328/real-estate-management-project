@@ -42,7 +42,7 @@ export const updateDriverRules = [
 
 export const quickOutsideRules = [
   body('name').trim().notEmpty().withMessage('Name is required'),
-  body('mobile').trim().notEmpty().withMessage('Mobile is required'),
+  body('mobile').optional({ values: 'falsy' }).trim(),
   body('vehicleNumber').optional().trim(),
   body('notes').optional().trim(),
 ];

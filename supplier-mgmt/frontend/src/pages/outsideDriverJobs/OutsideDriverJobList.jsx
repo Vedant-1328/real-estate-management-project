@@ -83,7 +83,7 @@ export default function OutsideDriverJobList() {
         status: status === 'all' ? undefined : status,
         outsideOnly: true,
       });
-      setAssignments(data.data);
+      setAssignments(data.data ?? []);
     } catch {
       setLoadError('Failed to load outside driver jobs.');
     } finally {
@@ -123,8 +123,8 @@ export default function OutsideDriverJobList() {
       await deleteAssignment(row.id);
       toast.success('Job deleted');
       load();
-    } catch {
-      toast.error('Failed to delete job');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete job');
     }
   };
 
@@ -210,6 +210,7 @@ export default function OutsideDriverJobList() {
             { key: 'assignmentDate', label: 'Date' },
             { key: 'jobType', label: 'Job Type' },
             { key: 'outsideDriver', label: 'Outside Driver' },
+            { key: 'replacementOf', label: 'Replacement of' },
             { key: 'vehicle', label: 'Vehicle' },
             { key: 'route', label: 'From → To' },
             { key: 'expectedTrips', label: 'Expected Trips' },
@@ -222,6 +223,7 @@ export default function OutsideDriverJobList() {
             assignmentDate: formatDate(a.assignmentDate),
             jobType: a.jobType?.name || '—',
             outsideDriver: <OutsideDriverCell row={a} />,
+            replacementOf: a.replacedDriverLabel || a.replacedDriver?.name || '—',
             vehicle: a.vehicle?.vehicleNumber || a.outsideDriverVehicle || '—',
             route: a.routeLabel,
             driverCost: a.driverCost != null ? formatCurrency(a.driverCost) : '—',

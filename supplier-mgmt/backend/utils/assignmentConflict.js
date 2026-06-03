@@ -1,7 +1,11 @@
 import { Op } from 'sequelize';
 import { JobAssignment } from '../models/index.js';
 
-const TERMINAL_STATUSES = ['completed', 'cancelled'];
+// Only `cancelled` is treated as terminal here. We deliberately keep
+// `completed` in the conflict pool because every EOD now auto-creates a
+// `completed` assignment stub — a manual outside-driver job on the same
+// vehicle/driver/day should still be flagged as a conflict.
+const TERMINAL_STATUSES = ['cancelled'];
 
 export const findAssignmentConflicts = async ({
   assignmentDate,

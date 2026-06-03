@@ -61,7 +61,7 @@ export default function AdvanceList() {
 
   useEffect(() => {
     fetchDrivers()
-      .then((res) => setDrivers(res.data.data))
+      .then((res) => setDrivers(res.data?.data ?? []))
       .catch(() => {});
   }, []);
 
@@ -76,7 +76,7 @@ export default function AdvanceList() {
         status: status === 'all' ? undefined : status,
         search: search || undefined,
       });
-      setAdvances(data.data);
+      setAdvances(data.data ?? []);
     } catch {
       toast.error('Failed to load advances');
     } finally {

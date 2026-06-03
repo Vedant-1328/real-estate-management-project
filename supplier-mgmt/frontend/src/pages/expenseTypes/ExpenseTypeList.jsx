@@ -39,10 +39,12 @@ export default function ExpenseTypeList() {
   const load = useCallback(async () => {
     if (!canView) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const { data } = await fetchExpenseTypes();
-      setItems(data.data);
+      setItems(data.data ?? []);
     } catch {
+      setLoadError('Failed to load expense types.');
       toast.error('Failed to load expense types');
     } finally {
       setLoading(false);
@@ -94,7 +96,7 @@ export default function ExpenseTypeList() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Expense Types</h1>
-          <p className="mt-1 text-sm text-slate-600">Categories for daily expense entries</p>
+          <p className="mt-1 text-sm text-slate-600">Categories for daily expenses and EOD entries</p>
         </div>
         {canAdd && (
           <Button

@@ -53,7 +53,7 @@ export default function CompanyRates({ company, open, onClose }) {
     setLoadError(null);
     try {
       const { data } = await fetchCompanyRates(company.id);
-      setRates(data.data);
+      setRates(data.data ?? []);
     } catch {
       setLoadError('Failed to load rates.');
     } finally {
@@ -65,7 +65,7 @@ export default function CompanyRates({ company, open, onClose }) {
     if (open && company) {
       loadRates();
       fetchJobTypes()
-        .then((res) => setJobTypes(res.data.data))
+        .then((res) => setJobTypes(res.data?.data ?? []))
         .catch(() => toast.error('Failed to load job types'));
     }
   }, [open, company, loadRates, toast]);
@@ -95,7 +95,7 @@ export default function CompanyRates({ company, open, onClose }) {
     >
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm text-slate-600">
-          Rates use the most recent effective date on or before the assignment date.
+          Rates use the most recent effective date on or before the EOD entry date.
         </p>
         {canEdit && (
           <Button

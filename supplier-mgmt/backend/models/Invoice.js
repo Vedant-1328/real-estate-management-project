@@ -1,6 +1,6 @@
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/db.js';
-import { modelOptions } from './baseOptions.js';
+import { encryptedValueType, modelOptions } from './baseOptions.js';
 
 const Invoice = sequelize.define(
   'Invoice',
@@ -49,84 +49,73 @@ const Invoice = sequelize.define(
       references: { model: 'companies', key: 'id' },
     },
     billingPeriodFrom: {
-      type: DataTypes.DATEONLY,
+      // STRING (not DATEONLY): column stores encrypted ciphertext; DATEONLY corrupts enc:* on save
+      type: DataTypes.STRING(10),
       allowNull: true,
       field: 'billing_period_from',
     },
     billingPeriodTo: {
-      type: DataTypes.DATEONLY,
+      type: DataTypes.STRING(10),
       allowNull: true,
       field: 'billing_period_to',
     },
     totalTrips: {
-      type: DataTypes.INTEGER.UNSIGNED,
+      type: encryptedValueType,
       allowNull: true,
-      defaultValue: 0,
       field: 'total_trips',
     },
     totalAmount: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: false,
-      defaultValue: 0,
       field: 'total_amount',
     },
     extraCharges: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
-      defaultValue: 0,
       field: 'extra_charges',
     },
     discount: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
-      defaultValue: 0,
     },
     discountPercent: {
-      type: DataTypes.DECIMAL(5, 2),
+      type: encryptedValueType,
       allowNull: true,
-      defaultValue: 0,
       field: 'discount_percent',
     },
     taxRate: {
-      type: DataTypes.DECIMAL(5, 2),
+      type: encryptedValueType,
       allowNull: true,
-      defaultValue: 0,
       field: 'tax_rate',
     },
     cgstRate: {
-      type: DataTypes.DECIMAL(5, 2),
+      type: encryptedValueType,
       allowNull: true,
-      defaultValue: 0,
       field: 'cgst_rate',
     },
     sgstRate: {
-      type: DataTypes.DECIMAL(5, 2),
+      type: encryptedValueType,
       allowNull: true,
-      defaultValue: 0,
       field: 'sgst_rate',
     },
     taxAmount: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
-      defaultValue: 0,
       field: 'tax_amount',
     },
     cgstAmount: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
-      defaultValue: 0,
       field: 'cgst_amount',
     },
     sgstAmount: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
-      defaultValue: 0,
       field: 'sgst_amount',
     },
     grandTotal: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: false,
-      defaultValue: 0,
       field: 'grand_total',
     },
     paymentStatus: {

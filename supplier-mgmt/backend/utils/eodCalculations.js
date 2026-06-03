@@ -1,3 +1,8 @@
+/** EOD row linked to an outside-hire assignment stub. */
+export const isOutsideEodEntry = (entry) =>
+  Boolean(entry?.assignment?.outsideDriverName);
+
+/** Customer billing: trips × company rate per trip (+ extras − deductions). */
 export const calculateEodTotal = ({
   actualTrips = 0,
   ratePerTrip = 0,

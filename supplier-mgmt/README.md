@@ -94,8 +94,39 @@ Password for all accounts below: **Admin@123**
 | `backend`  | `npm run db:sync` | Sync schema + seed |
 | `frontend` | `npm run dev`     | Vite dev server |
 | `frontend` | `npm run build`   | Production build |
+| root       | `npm run test:e2e` | Playwright browser tests (all pages + key buttons) |
 
-## Production deployment
+## Browser tests (Playwright)
+
+End-to-end UI tests click through every sidebar page, login/logout, modals, and main buttons.
+
+**Prerequisites:** MySQL running, `backend/.env` configured, and `npm run db:sync` done once (Super Admin user).
+
+```bash
+cd supplier-mgmt
+npm install
+npm run install:all
+npx playwright install chromium
+npm run test:e2e
+```
+
+With servers already running (`npm run dev` in another terminal), Playwright reuses them when possible. If the web server step times out or port 5173 is busy, start the stack yourself and run:
+
+```bash
+# PowerShell
+$env:PW_SKIP_WEBSERVER='1'; npm run test:e2e
+```
+
+Tests use `http://localhost:5173` (not `127.0.0.1`) so they match Vite on Windows.
+
+Other commands:
+
+- `npm run test:e2e:headed` — watch the browser
+- `npm run test:e2e:ui` — interactive UI mode
+- `npm run test:e2e:report` — open HTML report after a run
+
+HTML report: `playwright-report/` · traces on failure in `test-results/`
+
 
 1. **Environment** — Copy `backend/.env.production.example` to `backend/.env` and set:
    - `NODE_ENV=production`
@@ -112,6 +143,13 @@ Password for all accounts below: **Admin@123**
    - Use `backend/Dockerfile` and mount env + uploads volume.
 
 5. **Uploads** — Files under `/uploads` require authentication; ensure the SPA sends the JWT (Axios does this automatically).
+
+## Daily workflow (EOD & billing)
+
+1. **Sites** — Link each master site to the customer **company** it belongs to.
+2. **EOD Entries** — One afternoon entry per vehicle per day; rate comes from the company rate card.
+3. **Generate Invoice** — Type the **customer name** manually (not from the company master); pick the date range; on step 2 select only the trips for that customer.
+4. **Bill From** — Choose your company so bank details appear on the PDF.
 
 ## Security features
 

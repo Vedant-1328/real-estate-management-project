@@ -23,12 +23,12 @@ const Permission = sequelize.define(
       primaryKey: true,
     },
     moduleName: {
-      type: DataTypes.STRING(80),
+      type: DataTypes.TEXT,
       allowNull: false,
       field: 'module_name',
     },
     action: {
-      type: DataTypes.ENUM(...PERMISSION_ACTIONS),
+      type: DataTypes.TEXT,
       allowNull: false,
     },
   },

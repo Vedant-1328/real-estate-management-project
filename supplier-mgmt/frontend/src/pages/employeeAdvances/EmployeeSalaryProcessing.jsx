@@ -80,7 +80,7 @@ export default function EmployeeSalaryProcessing() {
         year: Number(year),
         employeeType: employeeType === 'all' ? undefined : employeeType,
       });
-      setRows(data.data);
+      setRows(data.data ?? []);
       setSelected(new Set());
     } catch {
       setLoadError('Failed to load salary summary.');

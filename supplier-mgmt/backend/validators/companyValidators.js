@@ -7,6 +7,7 @@ export const listCompaniesRules = [
   query('limit').optional().isInt({ min: 1, max: 500 }).toInt(),
   query('search').optional().trim(),
   query('status').optional().isIn(['active', 'inactive', 'all']),
+  query('companyType').optional().isIn(['own', 'customer', 'all']),
 ];
 
 export const companyIdParam = [param('id').isInt({ min: 1 }).toInt()];
@@ -18,6 +19,7 @@ export const rateIdParam = [
 
 export const createCompanyRules = [
   body('companyName').trim().notEmpty().withMessage('Company name is required'),
+  body('companyType').optional().isIn(['own', 'customer']).withMessage('Invalid company type'),
   body('contactPerson').trim().notEmpty().withMessage('Contact person is required'),
   body('mobile').trim().notEmpty().withMessage('Mobile is required'),
   body('email').optional({ values: 'falsy' }).isEmail().withMessage('Invalid email'),
@@ -38,6 +40,7 @@ export const createCompanyRules = [
 export const updateCompanyRules = [
   ...companyIdParam,
   body('companyName').optional().trim().notEmpty(),
+  body('companyType').optional().isIn(['own', 'customer']),
   body('contactPerson').optional().trim().notEmpty(),
   body('mobile').optional().trim().notEmpty(),
   body('email').optional({ values: 'falsy' }).isEmail(),

@@ -5,7 +5,6 @@ export const listAuditLogs = async (req, res) => {
   const { module, userId, from, to } = req.query;
   const where = {};
 
-  if (module && module !== 'all') where.module = module;
   if (userId) where.userId = userId;
   if (from || to) {
     where.timestamp = {};
@@ -17,12 +16,16 @@ export const listAuditLogs = async (req, res) => {
     }
   }
 
-  const logs = await AuditLog.findAll({
+  let logs = await AuditLog.findAll({
     where,
     include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'] }],
     order: [['timestamp', 'DESC']],
-    limit: 500,
+    limit: module && module !== 'all' ? 2000 : 500,
   });
+
+  if (module && module !== 'all') {
+    logs = logs.filter((log) => log.module === module).slice(0, 500);
+  }
 
   res.json({
     success: true,

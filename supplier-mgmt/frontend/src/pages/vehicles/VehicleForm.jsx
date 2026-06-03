@@ -124,7 +124,12 @@ export default function VehicleForm({ vehicle, onSuccess, onCancel }) {
         onSuccess?.(data.data);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to save vehicle');
+      const apiErrors = err.response?.data?.errors;
+      if (Array.isArray(apiErrors) && apiErrors.length > 0) {
+        toast.error(apiErrors.map((e) => e.message).join(' · '));
+      } else {
+        toast.error(err.response?.data?.message || 'Failed to save vehicle');
+      }
     }
   };
 

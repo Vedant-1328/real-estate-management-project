@@ -70,7 +70,7 @@ export const seedIfEmpty = async () => {
 
   console.log('Seeding database...');
 
-  const roles = await Role.bulkCreate(ROLES);
+  const roles = await Role.bulkCreate(ROLES, { individualHooks: true });
   const superAdminRole = roles.find((r) => r.name === SUPER_ADMIN_ROLE);
 
   const permissionRows = [];
@@ -79,7 +79,7 @@ export const seedIfEmpty = async () => {
       permissionRows.push({ moduleName, action });
     }
   }
-  const permissions = await Permission.bulkCreate(permissionRows);
+  const permissions = await Permission.bulkCreate(permissionRows, { individualHooks: true });
 
   await RolePermission.bulkCreate(
     permissions.map((p) => ({
@@ -88,9 +88,9 @@ export const seedIfEmpty = async () => {
     }))
   );
 
-  await JobType.bulkCreate(
-    JOB_TYPES.map((jt) => ({ ...jt, status: 'active' }))
-  );
+  await JobType.bulkCreate(JOB_TYPES.map((jt) => ({ ...jt, status: 'active' })), {
+    individualHooks: true,
+  });
 
   await ExpenseType.bulkCreate(
     EXPENSE_TYPES.map((name) => ({ name, status: 'active' }))

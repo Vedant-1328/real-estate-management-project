@@ -26,6 +26,7 @@ import EmployeeDocument from './EmployeeDocument.js';
 import DriverAdvance from './DriverAdvance.js';
 import EmployeeAdvance from './EmployeeAdvance.js';
 import AuditLog from './AuditLog.js';
+import { applyModelEncryption } from '../utils/applyModelEncryption.js';
 
 const models = {
   User,
@@ -56,6 +57,7 @@ const models = {
 };
 
 defineAssociations(models);
+applyModelEncryption(models);
 
 export {
   sequelize,

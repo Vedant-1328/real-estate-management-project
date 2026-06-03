@@ -23,14 +23,15 @@ export default function DriverReport() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
-    fetchDrivers().then((res) => setDrivers(res.data.data)).catch(() => {});
+    fetchDrivers().then((res) => setDrivers(res.data?.data ?? [])).catch(() => {});
   }, []);
 
   const generate = async () => {
     setLoading(true);
-    setGenerated(true);
+    setLoadError(null);
     try {
       const { data } = await fetchDriverReport({
         from,
@@ -38,7 +39,7 @@ export default function DriverReport() {
         driverId: driverId || undefined,
       });
       setRows(
-        data.data.map((r) => ({
+        (data.data ?? []).map((r) => ({
           ...r,
           outsideDriverPayments: formatCurrency(r.outsideDriverPayments),
           _outsideDriverPayments: r.outsideDriverPayments,
@@ -51,7 +52,12 @@ export default function DriverReport() {
         assignedDays: '',
         outsideDriverPayments: formatCurrency(data.summary.totalOutsidePayments),
       });
+      setGenerated(true);
     } catch {
+      setLoadError('Failed to generate report.');
+      setRows([]);
+      setSummary(null);
+      setGenerated(true);
       toast.error('Failed to generate report');
     } finally {
       setLoading(false);
@@ -70,6 +76,8 @@ export default function DriverReport() {
       subtitle="Jobs, trips, and outside driver payments"
       generated={generated}
       loading={loading}
+      error={loadError}
+      onRetry={generate}
       onGenerate={generate}
       exportFilename="driver-report.csv"
       columns={[

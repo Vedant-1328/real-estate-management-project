@@ -32,8 +32,8 @@ export default function ExpenseReport() {
   useEffect(() => {
     Promise.all([fetchVehicles(), fetchExpenseTypes()])
       .then(([v, t]) => {
-        setVehicles(v.data.data);
-        setExpenseTypes(t.data.data);
+        setVehicles(v.data?.data ?? []);
+        setExpenseTypes(t.data?.data ?? []);
       })
       .catch(() => {});
   }, []);
@@ -48,21 +48,22 @@ export default function ExpenseReport() {
         vehicleId: vehicleId || undefined,
         expenseTypeId: expenseTypeId || undefined,
       });
+      const payload = data.data ?? {};
       setGrouped(
-        data.data.grouped.map((g) => ({
+        (payload.grouped ?? []).map((g) => ({
           ...g,
           total: formatCurrency(g.total),
           _total: g.total,
         }))
       );
       setMonthly(
-        data.data.monthlyTotals.map((m) => ({
+        (payload.monthlyTotals ?? []).map((m) => ({
           ...m,
           total: formatCurrency(m.total),
           _total: m.total,
         }))
       );
-      setSummary(data.summary);
+      setSummary(data.summary ?? null);
     } catch {
       toast.error('Failed to generate report');
     } finally {

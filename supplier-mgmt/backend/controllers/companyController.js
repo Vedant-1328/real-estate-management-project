@@ -2,9 +2,18 @@ import { Op } from 'sequelize';
 import {
   Company,
   CompanyJobRate,
+  EodEntry,
+  Invoice,
+  InvoiceItem,
+  JobAssignment,
   JobType,
+  Payment,
+  Site,
+  sequelize,
 } from '../models/index.js';
 import { formatRate, RATE_TYPE_LABELS } from '../utils/companyRates.js';
+import { hardDestroy, hardDestroyWhere } from '../utils/hardDestroy.js';
+import { isFieldEncryptionEnabled } from '../utils/fieldEncryption.js';
 
 const formatCompany = (company) => {
   const plain = company.get ? company.get({ plain: true }) : company;
@@ -15,17 +24,23 @@ export const listCompanies = async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 10));
   const offset = (page - 1) * limit;
-  const { search, status } = req.query;
+  const { search, status, companyType } = req.query;
 
   const where = {};
   if (status && status !== 'all') where.status = status;
+  if (companyType && companyType !== 'all') where.companyType = companyType;
   if (search) {
-    where[Op.or] = [
-      { companyName: { [Op.like]: `%${search}%` } },
-      { contactPerson: { [Op.like]: `%${search}%` } },
-      { mobile: { [Op.like]: `%${search}%` } },
-      { gstNumber: { [Op.like]: `%${search}%` } },
-    ];
+    const term = `%${search}%`;
+    if (isFieldEncryptionEnabled()) {
+      where.companyName = { [Op.like]: term };
+    } else {
+      where[Op.or] = [
+        { companyName: { [Op.like]: term } },
+        { contactPerson: { [Op.like]: term } },
+        { mobile: { [Op.like]: term } },
+        { gstNumber: { [Op.like]: term } },
+      ];
+    }
   }
 
   const { count, rows } = await Company.findAndCountAll({
@@ -50,6 +65,7 @@ export const listCompanies = async (req, res) => {
 export const createCompany = async (req, res) => {
   const company = await Company.create({
     companyName: req.body.companyName,
+    companyType: req.body.companyType || 'customer',
     contactPerson: req.body.contactPerson,
     mobile: req.body.mobile,
     email: req.body.email || null,
@@ -93,6 +109,7 @@ export const updateCompany = async (req, res) => {
 
   const fields = [
     'companyName',
+    'companyType',
     'contactPerson',
     'mobile',
     'email',
@@ -116,14 +133,150 @@ export const updateCompany = async (req, res) => {
   res.json({ success: true, data: formatCompany(company) });
 };
 
+const companyUsageCounts = async (companyId) => {
+  const [sites, assignments, eodEntries, billedInvoices, issuedInvoices] = await Promise.all([
+    Site.count({ where: { companyId } }),
+    JobAssignment.count({ where: { companyId } }),
+    EodEntry.count({ where: { companyId } }),
+    Invoice.count({ where: { companyId } }),
+    Invoice.count({ where: { issuerCompanyId: companyId } }),
+  ]);
+
+  return { sites, assignments, eodEntries, billedInvoices, issuedInvoices };
+};
+
+const deleteInvoicesForCompany = async (companyId, transaction) => {
+  const invoices = await Invoice.findAll({
+    where: {
+      [Op.or]: [{ companyId }, { issuerCompanyId: companyId }],
+    },
+    include: [{ model: InvoiceItem, as: 'items' }],
+    transaction,
+  });
+
+  for (const invoice of invoices) {
+    await hardDestroyWhere(Payment, { invoiceId: invoice.id }, { transaction });
+    await hardDestroyWhere(InvoiceItem, { invoiceId: invoice.id }, { transaction });
+    await hardDestroy(invoice, { transaction });
+  }
+
+  return invoices.length;
+};
+
+const deleteEodEntriesForCompany = async (companyId, transaction) => {
+  const entries = await EodEntry.findAll({
+    where: { companyId },
+    transaction,
+  });
+
+  for (const entry of entries) {
+    const assignmentId = entry.assignmentId;
+    await hardDestroy(entry, { transaction });
+    if (assignmentId) {
+      const stub = await JobAssignment.findOne({
+        where: { id: assignmentId, status: 'completed', companyId },
+        transaction,
+      });
+      if (stub) {
+        await hardDestroy(stub, { transaction });
+      }
+    }
+  }
+
+  return entries.length;
+};
+
+const cascadeDeleteCompany = async (companyId) => {
+  const t = await sequelize.transaction();
+  try {
+    const invoiceCount = await deleteInvoicesForCompany(companyId, t);
+    const eodCount = await deleteEodEntriesForCompany(companyId, t);
+    const assignmentCount = await JobAssignment.destroy({
+      where: { companyId },
+      force: true,
+      transaction: t,
+    });
+    const siteCount = await Site.destroy({
+      where: { companyId },
+      force: true,
+      transaction: t,
+    });
+    await hardDestroyWhere(CompanyJobRate, { companyId }, { transaction: t });
+
+    const company = await Company.findByPk(companyId, { transaction: t });
+    if (!company) {
+      await t.rollback();
+      return null;
+    }
+    await hardDestroy(company, { transaction: t });
+
+    await t.commit();
+    return { invoiceCount, eodCount, assignmentCount, siteCount };
+  } catch (err) {
+    await t.rollback();
+    throw err;
+  }
+};
+
 export const deleteCompany = async (req, res) => {
   const company = await Company.findByPk(req.params.id);
   if (!company) {
     return res.status(404).json({ success: false, message: 'Company not found' });
   }
 
-  await company.destroy();
-  res.json({ success: true, message: 'Company deleted' });
+  const usage = await companyUsageCounts(company.id);
+  const hasLinked =
+    usage.sites > 0 ||
+    usage.assignments > 0 ||
+    usage.eodEntries > 0 ||
+    usage.billedInvoices > 0 ||
+    usage.issuedInvoices > 0;
+
+  const cascade = req.query.cascade === 'true' || req.query.cascade === '1';
+  if (hasLinked && !cascade) {
+    const blockers = [];
+    if (usage.sites > 0) blockers.push(`${usage.sites} site(s)`);
+    if (usage.assignments > 0) blockers.push(`${usage.assignments} job assignment(s)`);
+    if (usage.eodEntries > 0) blockers.push(`${usage.eodEntries} EOD entry(ies)`);
+    if (usage.billedInvoices > 0) {
+      blockers.push(`${usage.billedInvoices} invoice(s) billed to this company`);
+    }
+    if (usage.issuedInvoices > 0) {
+      blockers.push(`${usage.issuedInvoices} invoice(s) issued by this company`);
+    }
+    return res.status(409).json({
+      success: false,
+      message: `This company is linked to ${blockers.join(', ')}. Confirm delete with cascade to remove the company and all related data.`,
+      linked: usage,
+    });
+  }
+
+  let summary;
+  if (hasLinked) {
+    summary = await cascadeDeleteCompany(company.id);
+  } else {
+    await hardDestroyWhere(CompanyJobRate, { companyId: company.id });
+    await hardDestroy(company);
+    summary = {};
+  }
+
+  if (summary === null) {
+    return res.status(404).json({ success: false, message: 'Company not found' });
+  }
+
+  const parts = [];
+  if (summary.siteCount) parts.push(`${summary.siteCount} site(s)`);
+  if (summary.assignmentCount) parts.push(`${summary.assignmentCount} job assignment(s)`);
+  if (summary.eodCount) parts.push(`${summary.eodCount} EOD entry(ies)`);
+  if (summary.invoiceCount) parts.push(`${summary.invoiceCount} invoice(s)`);
+
+  res.json({
+    success: true,
+    message:
+      parts.length > 0
+        ? `Company deleted along with ${parts.join(', ')}`
+        : 'Company deleted',
+  });
 };
 
 export const listRates = async (req, res) => {
@@ -148,6 +301,12 @@ export const createRate = async (req, res) => {
   const company = await Company.findByPk(req.params.id);
   if (!company) {
     return res.status(404).json({ success: false, message: 'Company not found' });
+  }
+  if (company.companyType !== 'customer') {
+    return res.status(400).json({
+      success: false,
+      message: 'Job rates can only be added to customer companies',
+    });
   }
 
   const jobType = await JobType.findByPk(req.body.jobTypeId);
@@ -206,6 +365,6 @@ export const deleteRate = async (req, res) => {
     return res.status(404).json({ success: false, message: 'Rate not found' });
   }
 
-  await rate.destroy();
+  await hardDestroy(rate);
   res.json({ success: true, message: 'Rate deleted' });
 };

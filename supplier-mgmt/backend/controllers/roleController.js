@@ -1,6 +1,7 @@
-import { Op } from 'sequelize';
+import { hardDestroyWhere } from '../utils/hardDestroy.js';
 import { Permission, Role, RolePermission } from '../models/index.js';
 import { SUPER_ADMIN_ROLE } from '../utils/permissions.js';
+import { roleNameExists } from '../utils/roleHelpers.js';
 
 export const PERMISSION_GRID_MODULES = [
   'companies',
@@ -40,7 +41,7 @@ const formatRole = (role, permissionCount) => {
 };
 
 export const listRoles = async (req, res) => {
-  const roles = await Role.findAll({ order: [['name', 'ASC']] });
+  const roles = (await Role.findAll()).sort((a, b) => a.name.localeCompare(b.name));
   const counts = await RolePermission.findAll({
     attributes: [
       'roleId',
@@ -60,8 +61,7 @@ export const listRoles = async (req, res) => {
 };
 
 export const createRole = async (req, res) => {
-  const existing = await Role.findOne({ where: { name: req.body.name } });
-  if (existing) {
+  if (await roleNameExists(req.body.name)) {
     return res.status(400).json({ success: false, message: 'Role name already exists' });
   }
 
@@ -83,8 +83,7 @@ export const updateRole = async (req, res) => {
   }
 
   if (req.body.name && req.body.name !== role.name) {
-    const dup = await Role.findOne({ where: { name: req.body.name } });
-    if (dup) {
+    if (await roleNameExists(req.body.name, role.id)) {
       return res.status(400).json({ success: false, message: 'Role name already exists' });
     }
     role.name = req.body.name;
@@ -107,16 +106,14 @@ export const getRolePermissions = async (req, res) => {
 
   const isSuperAdmin = role.name === SUPER_ADMIN_ROLE;
 
-  const allPermissions = await Permission.findAll({
-    where: {
-      moduleName: { [Op.in]: PERMISSION_GRID_MODULES },
-      action: { [Op.in]: GRID_ACTIONS },
-    },
-    order: [
-      ['moduleName', 'ASC'],
-      ['action', 'ASC'],
-    ],
-  });
+  const allPermissions = (await Permission.findAll())
+    .filter(
+      (p) => PERMISSION_GRID_MODULES.includes(p.moduleName) && GRID_ACTIONS.includes(p.action)
+    )
+    .sort(
+      (a, b) =>
+        a.moduleName.localeCompare(b.moduleName) || a.action.localeCompare(b.action)
+    );
 
   let allowedSet = new Set();
   if (isSuperAdmin) {
@@ -171,20 +168,18 @@ export const replaceRolePermissions = async (req, res) => {
 
   const allowedItems = (req.body.permissions || []).filter((p) => p.allowed);
 
-  const permissionRecords = await Permission.findAll({
-    where: {
-      [Op.or]: allowedItems.map((p) => ({
-        moduleName: p.moduleName,
-        action: p.action,
-      })),
-    },
-  });
+  const allowedKeys = new Set(
+    allowedItems.map((p) => `${p.moduleName}:${p.action}`)
+  );
+  const permissionRecords = (await Permission.findAll()).filter((p) =>
+    allowedKeys.has(`${p.moduleName}:${p.action}`)
+  );
 
   const permMap = new Map(
     permissionRecords.map((p) => [`${p.moduleName}:${p.action}`, p.id])
   );
 
-  await RolePermission.destroy({ where: { roleId: role.id } });
+  await hardDestroyWhere(RolePermission, { roleId: role.id });
 
   const rows = [];
   for (const item of allowedItems) {

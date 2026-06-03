@@ -22,6 +22,7 @@ const schema = z.object({
     .refine((v) => !v || /^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(v), 'Invalid IFSC code'),
   bankAccountHolderName: z.string().optional(),
   status: z.enum(['active', 'inactive']),
+  companyType: z.enum(['own', 'customer']),
   notes: z.string().optional(),
 });
 
@@ -37,10 +38,11 @@ const defaultValues = {
   bankIfscCode: '',
   bankAccountHolderName: '',
   status: 'active',
+  companyType: 'customer',
   notes: '',
 };
 
-export default function CompanyForm({ company, onSuccess, onCancel }) {
+export default function CompanyForm({ company, defaultCompanyType = 'customer', onSuccess, onCancel }) {
   const toast = useToast();
   const isEdit = Boolean(company);
   const serverCompanyName = useServerFieldError('companyName');
@@ -51,6 +53,7 @@ export default function CompanyForm({ company, onSuccess, onCancel }) {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(schema),
@@ -71,12 +74,13 @@ export default function CompanyForm({ company, onSuccess, onCancel }) {
         bankIfscCode: company.bankIfscCode || '',
         bankAccountHolderName: company.bankAccountHolderName || '',
         status: company.status || 'active',
+        companyType: company.companyType || defaultCompanyType,
         notes: company.notes || '',
       });
     } else {
-      reset(defaultValues);
+      reset({ ...defaultValues, companyType: defaultCompanyType });
     }
-  }, [company, reset]);
+  }, [company, defaultCompanyType, reset]);
 
   const onSubmit = async (values) => {
     try {
@@ -111,8 +115,19 @@ export default function CompanyForm({ company, onSuccess, onCancel }) {
         : 'border-slate-300 focus:border-slate-500 focus:ring-slate-200'
     }`;
 
+  const companyType = watch('companyType');
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <input type="hidden" {...register('companyType')} />
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+        Type:{' '}
+        <span className="font-semibold">
+          {companyType === 'own' ? 'Own company' : 'Customer company'}
+        </span>
+      </div>
+
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">
           Company Name <span className="text-red-500">*</span>

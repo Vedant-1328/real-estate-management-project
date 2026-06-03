@@ -4,12 +4,7 @@ import { fetchEmployees } from '../../api/employees.js';
 import Button from '../../components/Button.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 
-const PAYMENT_MODES = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'bank', label: 'Bank' },
-  { value: 'upi', label: 'UPI' },
-  { value: 'other', label: 'Other' },
-];
+import { PAYMENT_MODE_OPTIONS } from '../../utils/paymentModes.js';
 
 const MONTHS = [
   { value: '1', label: 'January' },
@@ -46,7 +41,7 @@ export default function EmployeeAdvanceForm({ advance, onSuccess, onCancel }) {
 
   useEffect(() => {
     fetchEmployees({ status: 'active' })
-      .then((res) => setEmployees(res.data.data))
+      .then((res) => setEmployees(res.data?.data ?? []))
       .catch(() => {});
   }, []);
 
@@ -163,7 +158,7 @@ export default function EmployeeAdvanceForm({ advance, onSuccess, onCancel }) {
             onChange={(e) => setPaymentMode(e.target.value)}
             disabled={readOnly}
           >
-            {PAYMENT_MODES.map((m) => (
+            {PAYMENT_MODE_OPTIONS.map((m) => (
               <option key={m.value} value={m.value}>
                 {m.label}
               </option>

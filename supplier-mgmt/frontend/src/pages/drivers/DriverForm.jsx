@@ -78,7 +78,7 @@ export default function DriverForm({ driver, onSuccess, onCancel }) {
 
   useEffect(() => {
     fetchVehicles({ status: 'available' })
-      .then((res) => setVehicles(res.data.data))
+      .then((res) => setVehicles(res.data?.data ?? []))
       .catch(() => {});
   }, []);
 

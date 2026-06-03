@@ -13,6 +13,7 @@ import apiRoutes from './routes/index.js';
 import errorHandler from './middlewares/errorHandler.js';
 import { sanitizeBody } from './middlewares/sanitize.js';
 import { authenticateUpload, sendUploadFile } from './middlewares/uploadAuth.js';
+import { assertEncryptionReady } from './utils/fieldEncryption.js';
 
 dotenv.config();
 
@@ -75,6 +76,12 @@ const startServer = async () => {
     await connectDB();
     dbConnected = true;
     console.log('MySQL connected via Sequelize');
+    try {
+      assertEncryptionReady();
+      console.log('Field encryption active for sensitive database columns');
+    } catch (encErr) {
+      console.warn('Field encryption:', encErr.message);
+    }
   } catch (err) {
     dbConnected = false;
     console.warn('Database connection failed (server will still start):', err.message);

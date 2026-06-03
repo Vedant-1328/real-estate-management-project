@@ -7,6 +7,7 @@ import {
   getOutstanding,
   getPendingEod,
   listInvoices,
+  updateInvoice,
   updateInvoiceStatus,
 } from '../controllers/invoiceController.js';
 import { authenticate } from '../middlewares/auth.js';
@@ -18,6 +19,7 @@ import {
   idParam,
   listInvoiceRules,
   pendingEodRules,
+  updateInvoiceRules,
   updateStatusRules,
 } from '../validators/invoiceValidators.js';
 
@@ -47,7 +49,6 @@ router.post(
   createInvoice
 );
 router.get('/:id/pdf', checkPermission('invoices', 'print'), idParam, validate, downloadInvoicePdf);
-router.get('/:id', checkPermission('invoices', 'view'), idParam, validate, getInvoice);
 router.put(
   '/:id/status',
   checkPermission('invoices', 'edit'),
@@ -55,6 +56,15 @@ router.put(
   validate,
   updateInvoiceStatus
 );
+router.put(
+  '/:id',
+  checkPermission('invoices', 'edit'),
+  updateInvoiceRules,
+  validate,
+  auditLog('invoices'),
+  updateInvoice
+);
+router.get('/:id', checkPermission('invoices', 'view'), idParam, validate, getInvoice);
 router.delete('/:id', checkPermission('invoices', 'delete'), idParam, validate, auditLog('invoices'), cancelInvoice);
 
 export default router;

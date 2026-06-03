@@ -25,7 +25,7 @@ export default function UserForm({ user, onSuccess, onCancel, mode = 'edit' }) {
 
   useEffect(() => {
     fetchRoles()
-      .then((res) => setRoles(res.data.data))
+      .then((res) => setRoles(res.data?.data ?? []))
       .catch(() => {});
   }, []);
 

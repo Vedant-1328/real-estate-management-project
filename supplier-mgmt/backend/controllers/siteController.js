@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
 import { Company, Site, TemporarySite } from '../models/index.js';
+import { hardDestroy } from '../utils/hardDestroy.js';
 
 const SITE_TYPE_LABELS = {
   pickup: 'Pickup',
@@ -118,7 +119,7 @@ export const deleteSite = async (req, res) => {
   if (!site) {
     return res.status(404).json({ success: false, message: 'Site not found' });
   }
-  await site.destroy();
+  await hardDestroy(site);
   res.json({ success: true, message: 'Site deleted' });
 };
 

@@ -1,6 +1,6 @@
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/db.js';
-import { modelOptions } from './baseOptions.js';
+import { encryptedValueType, modelOptions } from './baseOptions.js';
 
 const Payment = sequelize.define(
   'Payment',
@@ -22,13 +22,12 @@ const Payment = sequelize.define(
       field: 'payment_date',
     },
     amount: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: false,
     },
     paymentMode: {
-      type: DataTypes.ENUM('cash', 'bank', 'upi', 'other'),
+      type: encryptedValueType,
       allowNull: false,
-      defaultValue: 'bank',
       field: 'payment_mode',
     },
     referenceNumber: {

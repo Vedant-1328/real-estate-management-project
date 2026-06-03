@@ -4,6 +4,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
   const sizes = {
     md: 'max-w-lg',
     lg: 'max-w-2xl',
+    xl: 'max-w-3xl',
   };
 
   return (

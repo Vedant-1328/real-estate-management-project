@@ -1,6 +1,8 @@
 import { Op } from 'sequelize';
 import { Driver, DriverAdvance } from '../models/index.js';
 import { buildSalarySummaryRow } from '../utils/salaryAdvanceSummary.js';
+import { hardDestroy } from '../utils/hardDestroy.js';
+import { isFieldEncryptionEnabled } from '../utils/fieldEncryption.js';
 
 const formatAdvance = (row) => {
   const plain = row.get ? row.get({ plain: true }) : { ...row };
@@ -20,10 +22,12 @@ export const listDriverAdvances = async (req, res) => {
 
   const driverWhere = {};
   if (search) {
-    driverWhere[Op.or] = [
-      { name: { [Op.like]: `%${search}%` } },
-      { mobile: { [Op.like]: `%${search}%` } },
-    ];
+    const term = `%${search}%`;
+    if (isFieldEncryptionEnabled()) {
+      driverWhere.name = { [Op.like]: term };
+    } else {
+      driverWhere[Op.or] = [{ name: { [Op.like]: term } }, { mobile: { [Op.like]: term } }];
+    }
   }
 
   const rows = await DriverAdvance.findAll({
@@ -121,7 +125,7 @@ export const deleteDriverAdvance = async (req, res) => {
     });
   }
 
-  await advance.destroy();
+  await hardDestroy(advance);
   res.json({ success: true, message: 'Advance deleted' });
 };
 

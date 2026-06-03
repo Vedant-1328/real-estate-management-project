@@ -23,14 +23,17 @@ export default function CompanyBillingReport() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
-    fetchCompanies().then((res) => setCompanies(res.data.data)).catch(() => {});
+    fetchCompanies({ limit: 500, status: 'active', companyType: 'customer' })
+      .then((res) => setCompanies(res.data?.data ?? []))
+      .catch(() => {});
   }, []);
 
   const generate = async () => {
     setLoading(true);
-    setGenerated(true);
+    setLoadError(null);
     try {
       const { data } = await fetchCompanyBillingReport({
         from,
@@ -38,7 +41,7 @@ export default function CompanyBillingReport() {
         companyId: companyId || undefined,
       });
       setRows(
-        data.data.map((r) => ({
+        (data.data ?? []).map((r) => ({
           ...r,
           totalInvoiced: formatCurrency(r.totalInvoiced),
           totalPaid: formatCurrency(r.totalPaid),
@@ -55,7 +58,12 @@ export default function CompanyBillingReport() {
         totalPaid: formatCurrency(data.summary.totalPaid),
         outstanding: formatCurrency(data.summary.totalOutstanding),
       });
+      setGenerated(true);
     } catch {
+      setLoadError('Failed to generate report.');
+      setRows([]);
+      setSummary(null);
+      setGenerated(true);
       toast.error('Failed to generate report');
     } finally {
       setLoading(false);
@@ -71,9 +79,11 @@ export default function CompanyBillingReport() {
   return (
     <ReportLayout
       title="Company Billing Report"
-      subtitle="Invoiced, paid, and outstanding by company"
+      subtitle="Invoiced, paid, and outstanding by customer (Companies master or invoice bill-to name)"
       generated={generated}
       loading={loading}
+      error={loadError}
+      onRetry={generate}
       onGenerate={generate}
       exportFilename="company-billing-report.csv"
       columns={[

@@ -1,6 +1,6 @@
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/db.js';
-import { modelOptions } from './baseOptions.js';
+import { encryptedValueType, modelOptions } from './baseOptions.js';
 
 const InvoiceItem = sequelize.define(
   'InvoiceItem',
@@ -23,7 +23,7 @@ const InvoiceItem = sequelize.define(
       references: { model: 'eod_entries', key: 'id' },
     },
     lineDate: {
-      type: DataTypes.DATEONLY,
+      type: DataTypes.STRING(10),
       allowNull: false,
       field: 'line_date',
     },
@@ -53,21 +53,18 @@ const InvoiceItem = sequelize.define(
       field: 'to_site',
     },
     actualTrips: {
-      type: DataTypes.INTEGER.UNSIGNED,
+      type: encryptedValueType,
       allowNull: false,
-      defaultValue: 0,
       field: 'actual_trips',
     },
     ratePerTrip: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: false,
-      defaultValue: 0,
       field: 'rate_per_trip',
     },
     amount: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: false,
-      defaultValue: 0,
     },
   },
   {

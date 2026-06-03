@@ -1,6 +1,6 @@
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/db.js';
-import { modelOptions } from './baseOptions.js';
+import { encryptedValueType, modelOptions } from './baseOptions.js';
 
 const EodEntry = sequelize.define(
   'EodEntry',
@@ -57,46 +57,48 @@ const EodEntry = sequelize.define(
       references: { model: 'sites', key: 'id' },
     },
     plannedTrips: {
-      type: DataTypes.INTEGER.UNSIGNED,
+      type: encryptedValueType,
       allowNull: true,
       field: 'planned_trips',
     },
     actualTrips: {
-      type: DataTypes.INTEGER.UNSIGNED,
+      type: encryptedValueType,
       allowNull: false,
-      defaultValue: 0,
       field: 'actual_trips',
     },
     ratePerTrip: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
       field: 'rate_per_trip',
     },
     totalAmount: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: false,
-      defaultValue: 0,
       field: 'total_amount',
     },
     extraCharges: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
-      defaultValue: 0,
       field: 'extra_charges',
     },
     deductions: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
-      defaultValue: 0,
     },
     dieselFuel: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
       field: 'diesel_fuel',
     },
     expense: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
+    },
+    expenseTypeId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'expense_type_id',
+      references: { model: 'expense_types', key: 'id' },
     },
     remarks: {
       type: DataTypes.TEXT,
@@ -119,7 +121,7 @@ const EodEntry = sequelize.define(
       references: { model: 'users', key: 'id' },
     },
     approvalDate: {
-      type: DataTypes.DATE,
+      type: encryptedValueType,
       allowNull: true,
       field: 'approval_date',
     },

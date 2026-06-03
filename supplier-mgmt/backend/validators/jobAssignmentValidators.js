@@ -26,7 +26,7 @@ export const effectiveRateRules = [
   query('vehicleType').optional().trim(),
 ];
 
-const assignmentBodyRules = [
+const buildAssignmentBodyRules = () => [
   body('assignmentDate').isISO8601(),
   body('companyId').optional({ values: 'falsy' }).isInt({ min: 1 }).toInt(),
   body('jobTypeId').isInt({ min: 1 }).toInt(),
@@ -36,6 +36,7 @@ const assignmentBodyRules = [
   body('outsideDriverName').optional().trim(),
   body('outsideDriverMobile').optional().trim(),
   body('outsideDriverVehicle').optional().trim(),
+  body('replacedDriverId').optional({ values: 'falsy' }).isInt({ min: 1 }).toInt(),
   body('fromSiteId').optional({ values: 'falsy' }).isInt({ min: 1 }).toInt(),
   body('toSiteId').optional({ values: 'falsy' }).isInt({ min: 1 }).toInt(),
   body('fromSiteTemp').optional().trim(),
@@ -48,9 +49,12 @@ const assignmentBodyRules = [
   body('forceAssign').optional().isBoolean().toBoolean(),
 ];
 
-export const createAssignmentRules = [...assignmentBodyRules];
+export const createAssignmentRules = buildAssignmentBodyRules();
 
-export const updateAssignmentRules = [...idParam, ...assignmentBodyRules];
+export const updateAssignmentRules = [
+  ...idParam,
+  ...buildAssignmentBodyRules().map((r) => r.optional({ nullable: true })),
+];
 
 export const updateStatusRules = [
   ...idParam,

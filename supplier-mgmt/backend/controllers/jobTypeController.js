@@ -1,9 +1,8 @@
-import { JobType } from '../models/index.js';
+import { CompanyJobRate, JobType } from '../models/index.js';
+import { hardDestroy, hardDestroyWhere } from '../utils/hardDestroy.js';
 
 export const listJobTypes = async (req, res) => {
-  const jobTypes = await JobType.findAll({
-    order: [['name', 'ASC']],
-  });
+  const jobTypes = (await JobType.findAll()).sort((a, b) => a.name.localeCompare(b.name));
   res.json({ success: true, data: jobTypes });
 };
 
@@ -39,6 +38,7 @@ export const deleteJobType = async (req, res) => {
   if (!jobType) {
     return res.status(404).json({ success: false, message: 'Job type not found' });
   }
-  await jobType.destroy();
+  await hardDestroyWhere(CompanyJobRate, { jobTypeId: jobType.id });
+  await hardDestroy(jobType);
   res.json({ success: true, message: 'Job type deleted' });
 };

@@ -1,8 +1,10 @@
 import { Op } from 'sequelize';
+import sequelize from '../config/db.js';
 import {
   Company,
   Driver,
   EodEntry,
+  ExpenseType,
   JobAssignment,
   JobType,
   Site,
@@ -10,9 +12,11 @@ import {
   Vehicle,
 } from '../models/index.js';
 import { calculateEodTotal } from '../utils/eodCalculations.js';
+import { getEffectiveRate } from '../utils/companyRates.js';
+import { hardDestroy } from '../utils/hardDestroy.js';
 import { hasPermission } from '../utils/permissions.js';
 
-const todayDate = () => new Date().toISOString().slice(0, 10);
+import { todayDate } from '../utils/dateOnly.js';
 
 const assignmentIncludes = [
   { model: Company, as: 'company', attributes: ['id', 'companyName'] },
@@ -36,9 +40,16 @@ const eodIncludes = [
       'dieselFuel',
       'fromSiteTemp',
       'toSiteTemp',
+      'outsideDriverName',
+      'outsideDriverMobile',
+      'outsideDriverVehicle',
+      'replacedDriverId',
+      'driverCost',
     ],
+    include: [{ model: Driver, as: 'replacedDriver', attributes: ['id', 'name'] }],
   },
   { model: User, as: 'approver', attributes: ['id', 'name'] },
+  { model: ExpenseType, as: 'expenseType', attributes: ['id', 'name', 'status'] },
 ];
 
 const routeLabel = (fromSite, toSite, fromTemp, toTemp) => {
@@ -47,25 +58,41 @@ const routeLabel = (fromSite, toSite, fromTemp, toTemp) => {
   return `${from} → ${to}`;
 };
 
-const formatAssignmentPending = (assignment) => {
-  const plain = assignment.get ? assignment.get({ plain: true }) : assignment;
-  plain.routeLabel = routeLabel(
-    plain.fromSite,
-    plain.toSite,
-    plain.fromSiteTemp,
-    plain.toSiteTemp
-  );
-  plain.driverLabel =
-    plain.driver?.name || plain.outsideDriverName || '—';
-  plain.vehicleLabel =
-    plain.vehicle?.vehicleNumber || plain.outsideDriverVehicle || '—';
-  plain.plannedTrips = plain.expectedTrips;
-  return plain;
+const parseOptionalAmount = (value) =>
+  value != null && value !== '' ? Number(value) : null;
+
+const resolveEodExpenseFields = async (body) => {
+  const expense = parseOptionalAmount(body.expense);
+  const expenseTypeId =
+    body.expenseTypeId != null && body.expenseTypeId !== ''
+      ? Number(body.expenseTypeId)
+      : null;
+
+  if (expense != null && expense > 0 && !expenseTypeId) {
+    return { error: 'Select an expense type when entering an expense amount' };
+  }
+  if (expenseTypeId && (expense == null || expense <= 0)) {
+    return { error: 'Enter an expense amount when selecting an expense type' };
+  }
+  if (expenseTypeId) {
+    const expenseType = await ExpenseType.findByPk(expenseTypeId);
+    if (!expenseType) {
+      return { error: 'Expense type not found' };
+    }
+    if (expenseType.status !== 'active') {
+      return { error: 'Selected expense type is inactive' };
+    }
+  }
+
+  return {
+    expense: expense != null && expense > 0 ? expense : null,
+    expenseTypeId: expense != null && expense > 0 ? expenseTypeId : null,
+  };
 };
 
 const formatEod = (entry) => {
   const plain = entry.get ? entry.get({ plain: true }) : { ...entry };
-  ['ratePerTrip', 'totalAmount', 'extraCharges', 'deductions', 'dieselFuel', 'expense'].forEach(
+  ['plannedTrips', 'actualTrips', 'ratePerTrip', 'totalAmount', 'extraCharges', 'deductions', 'dieselFuel', 'expense'].forEach(
     (f) => {
       if (plain[f] != null) plain[f] = Number(plain[f]);
     }
@@ -82,6 +109,10 @@ const formatEod = (entry) => {
     plain.driver?.name || assignment.outsideDriverName || '—';
   plain.vehicleLabel =
     plain.vehicle?.vehicleNumber || assignment.outsideDriverVehicle || '—';
+  plain.replacedDriverId = assignment.replacedDriverId ?? null;
+  plain.replacedDriverLabel = assignment.replacedDriver?.name || null;
+  plain.isOutsideDriver = Boolean(assignment.outsideDriverName);
+  if (assignment.driverCost != null) plain.driverCostPerDay = Number(assignment.driverCost);
   plain.isApproved = Boolean(plain.approvedBy);
   plain.approverName = plain.approver?.name || null;
 
@@ -103,36 +134,6 @@ const buildEodFromAssignment = (assignment) => {
     plannedTrips: plain.expectedTrips,
     ratePerTrip: null,
   };
-};
-
-export const listPending = async (_req, res) => {
-  const today = todayDate();
-
-  const existing = await EodEntry.findAll({
-    attributes: ['assignmentId'],
-    where: { date: today },
-    raw: true,
-  });
-  const existingIds = existing.map((e) => e.assignmentId);
-
-  const where = {
-    assignmentDate: today,
-    status: { [Op.notIn]: ['cancelled'] },
-  };
-  if (existingIds.length) {
-    where.id = { [Op.notIn]: existingIds };
-  }
-
-  const assignments = await JobAssignment.findAll({
-    where,
-    include: assignmentIncludes,
-    order: [['id', 'ASC']],
-  });
-
-  res.json({
-    success: true,
-    data: assignments.map(formatAssignmentPending),
-  });
 };
 
 export const listEodEntries = async (req, res) => {
@@ -175,32 +176,295 @@ export const getEodEntry = async (req, res) => {
   res.json({ success: true, data: formatEod(entry) });
 };
 
-export const createEodEntry = async (req, res) => {
-  const assignment = await JobAssignment.findByPk(req.body.assignmentId, {
-    include: assignmentIncludes,
+// Resolve the per-trip rate for a job context using company rate cards.
+// Returns null when no matching rate card exists.
+const resolveRateForContext = async ({ companyId, jobTypeId, vehicleId, date }) => {
+  if (!companyId || !jobTypeId) return null;
+  let vehicleType = null;
+  if (vehicleId) {
+    const vehicle = await Vehicle.findByPk(vehicleId, { attributes: ['vehicleType'] });
+    vehicleType = vehicle?.vehicleType ?? null;
+  }
+  const rate = await getEffectiveRate({
+    companyId,
+    jobTypeId,
+    vehicleType,
+    asOfDate: date,
   });
-  if (!assignment) {
-    return res.status(404).json({ success: false, message: 'Assignment not found' });
+  return rate ? Number(rate.rateAmount) : null;
+};
+
+// Validate standalone EOD context (when no assignmentId is supplied).
+// Returns an error string, or null when valid.
+const validateReplacementDriver = async (replacedDriverId) => {
+  if (!replacedDriverId) return 'On replacement of is required';
+  const replaced = await Driver.findByPk(replacedDriverId, {
+    attributes: ['id', 'status', 'driverType'],
+  });
+  if (!replaced || replaced.status === 'inactive' || replaced.driverType === 'outside') {
+    return 'Invalid replacement driver';
+  }
+  return null;
+};
+
+const validateStandaloneContext = async ({
+  jobTypeId,
+  companyId,
+  vehicleId,
+  driverId,
+  isOutsideDriver,
+  outsideDriverName,
+  outsideDriverMobile,
+  replacedDriverId,
+  driverCost,
+  fromSiteId,
+  toSiteId,
+  fromSiteTemp,
+  toSiteTemp,
+}) => {
+  if (!jobTypeId) return 'Job type is required';
+  const jobType = await JobType.findByPk(jobTypeId);
+  if (!jobType) return 'Invalid job type';
+
+  if (companyId) {
+    const company = await Company.findByPk(companyId);
+    if (!company) return 'Invalid company';
   }
 
-  const existing = await EodEntry.findOne({
-    where: { assignmentId: assignment.id },
-  });
-  if (existing) {
-    return res.status(400).json({
-      success: false,
-      message: 'EOD entry already exists for this assignment',
+  if (isOutsideDriver) {
+    if (!outsideDriverName?.trim()) return 'Outside driver name is required';
+    if (!outsideDriverMobile?.trim()) return 'Mobile is required';
+    if (!vehicleId) return 'Fleet vehicle is required';
+    const vehicle = await Vehicle.findByPk(vehicleId);
+    if (!vehicle) return 'Invalid fleet vehicle';
+    const replacementError = await validateReplacementDriver(replacedDriverId);
+    if (replacementError) return replacementError;
+    if (driverCost == null || driverCost === '' || Number(driverCost) <= 0) {
+      return 'Driver pay per day is required';
+    }
+  } else {
+    if (!vehicleId) return 'Vehicle is required';
+    if (!driverId) return 'Driver is required';
+    const vehicle = await Vehicle.findByPk(vehicleId);
+    if (!vehicle) return 'Invalid vehicle';
+    const driver = await Driver.findByPk(driverId);
+    if (!driver) return 'Invalid driver';
+  }
+
+  if (!fromSiteId && !fromSiteTemp) return 'From site or temporary site name is required';
+  if (!toSiteId && !toSiteTemp) return 'To site or temporary site name is required';
+
+  return null;
+};
+
+/** Resolve billing company from body + master sites (matches invoice picker logic). */
+const resolveCompanyIdForEod = async ({ companyId, fromSiteId, toSiteId }) => {
+  if (companyId) return companyId;
+  if (fromSiteId) {
+    const from = await Site.findByPk(fromSiteId, { attributes: ['companyId'] });
+    if (from?.companyId) return from.companyId;
+  }
+  if (toSiteId) {
+    const to = await Site.findByPk(toSiteId, { attributes: ['companyId'] });
+    if (to?.companyId) return to.companyId;
+  }
+  return null;
+};
+
+// Enforce "one EOD per resource per day":
+//   own driver  -> unique (vehicleId, date) and (driverId, date)
+//   outside     -> unique (outsideDriverName, date)
+//
+// `transaction` is required so the lookup participates in the surrounding
+// create transaction. `lock: true` upgrades the SELECT to a row lock so two
+// concurrent inserts can't both pass the check.
+const findDuplicateEodForDay = async (
+  { date, vehicleId, driverId, isOutsideDriver, outsideDriverName },
+  { transaction } = {}
+) => {
+  const queryOptions = transaction ? { transaction, lock: true } : {};
+  const ors = [];
+  if (!isOutsideDriver) {
+    if (vehicleId) ors.push({ vehicleId });
+    if (driverId) ors.push({ driverId });
+  }
+
+  if (isOutsideDriver && outsideDriverName) {
+    const sameDayAssignments = await JobAssignment.findAll({
+      attributes: ['id'],
+      where: {
+        assignmentDate: date,
+        outsideDriverName,
+      },
+      raw: true,
+      ...queryOptions,
+    });
+    if (!sameDayAssignments.length) return null;
+    return EodEntry.findOne({
+      where: {
+        date,
+        assignmentId: { [Op.in]: sameDayAssignments.map((a) => a.id) },
+      },
+      ...queryOptions,
     });
   }
 
-  const base = buildEodFromAssignment(assignment);
-  const extraCharges = req.body.extraCharges ?? 0;
-  const deductions = req.body.deductions ?? 0;
-  const actualTrips = req.body.actualTrips;
-  const ratePerTrip =
-    req.body.ratePerTrip != null && req.body.ratePerTrip !== ''
-      ? Number(req.body.ratePerTrip)
+  if (!ors.length) return null;
+  return EodEntry.findOne({
+    where: {
+      date,
+      [Op.or]: ors,
+    },
+    ...queryOptions,
+  });
+};
+
+export const createEodEntry = async (req, res) => {
+  const body = req.body || {};
+  const hasAssignmentId = body.assignmentId != null && body.assignmentId !== '';
+
+  // Legacy mode: client supplied a JobAssignment id (kept for backward compat).
+  if (hasAssignmentId) {
+    const assignment = await JobAssignment.findByPk(body.assignmentId, {
+      include: assignmentIncludes,
+    });
+    if (!assignment) {
+      return res.status(404).json({ success: false, message: 'Assignment not found' });
+    }
+
+    const existing = await EodEntry.findOne({
+      where: { assignmentId: assignment.id },
+    });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: 'EOD entry already exists for this assignment',
+      });
+    }
+
+    const base = buildEodFromAssignment(assignment);
+    const extraCharges = body.extraCharges ?? 0;
+    const deductions = body.deductions ?? 0;
+    const actualTrips = body.actualTrips;
+    let ratePerTrip =
+      body.ratePerTrip != null && body.ratePerTrip !== '' ? Number(body.ratePerTrip) : null;
+
+    if (ratePerTrip == null && base.companyId) {
+      ratePerTrip = await resolveRateForContext({
+        companyId: base.companyId,
+        jobTypeId: base.jobTypeId,
+        vehicleId: base.vehicleId,
+        date: base.date,
+      });
+    }
+
+    const totalAmount = calculateEodTotal({
+      actualTrips,
+      ratePerTrip: ratePerTrip ?? 0,
+      extraCharges,
+      deductions,
+    });
+
+    const dieselFuel =
+      body.dieselFuel != null && body.dieselFuel !== ''
+        ? body.dieselFuel
+        : base.dieselFuel ?? null;
+    const expenseFields = await resolveEodExpenseFields(body);
+    if (expenseFields.error) {
+      return res.status(400).json({ success: false, message: expenseFields.error });
+    }
+
+    const payload = {
+      ...base,
+      ratePerTrip,
+      actualTrips,
+      extraCharges,
+      deductions,
+      dieselFuel,
+      expense: expenseFields.expense,
+      expenseTypeId: expenseFields.expenseTypeId,
+      totalAmount,
+      remarks: body.remarks || null,
+      startTime: body.startTime || null,
+      endTime: body.endTime || null,
+      billingStatus: 'pending',
+    };
+
+    if (body.approved && hasPermission(req.user, 'eod_entries', 'approve')) {
+      payload.approvedBy = req.user.id;
+      payload.approvalDate = new Date();
+    }
+
+    const entry = await EodEntry.create(payload);
+    const full = await EodEntry.findByPk(entry.id, { include: eodIncludes });
+    return res.status(201).json({ success: true, data: formatEod(full) });
+  }
+
+  // Standalone mode: build a hidden JobAssignment stub + the EOD in one transaction.
+  const date = body.date || todayDate();
+  const isOutsideDriver = Boolean(body.isOutsideDriver);
+  const fromSiteId = body.fromSiteId ?? null;
+  const toSiteId = body.toSiteId ?? null;
+  const companyId = await resolveCompanyIdForEod({
+    companyId: body.companyId ?? null,
+    fromSiteId,
+    toSiteId,
+  });
+  const jobTypeId = body.jobTypeId;
+  const vehicleId = !isOutsideDriver ? body.vehicleId ?? null : body.vehicleId ?? null;
+  const driverId = !isOutsideDriver ? body.driverId ?? null : null;
+  const outsideDriverName = isOutsideDriver ? (body.outsideDriverName || '').trim() : null;
+  const outsideDriverMobile = isOutsideDriver ? body.outsideDriverMobile || null : null;
+  const outsideDriverVehicle = null;
+  const replacedDriverId = isOutsideDriver ? Number(body.replacedDriverId) : null;
+  const driverCost =
+    isOutsideDriver && body.driverCost != null && body.driverCost !== ''
+      ? Number(body.driverCost)
       : null;
+  const fromSiteTemp = body.fromSiteTemp ? String(body.fromSiteTemp).trim() : null;
+  const toSiteTemp = body.toSiteTemp ? String(body.toSiteTemp).trim() : null;
+
+  let ratePerTrip =
+    body.ratePerTrip != null && body.ratePerTrip !== '' ? Number(body.ratePerTrip) : null;
+
+  const validationError = await validateStandaloneContext({
+    jobTypeId,
+    companyId,
+    vehicleId,
+    driverId,
+    isOutsideDriver,
+    outsideDriverName,
+    outsideDriverMobile,
+    replacedDriverId,
+    driverCost,
+    fromSiteId,
+    toSiteId,
+    fromSiteTemp,
+    toSiteTemp,
+  });
+  if (validationError) {
+    return res.status(400).json({ success: false, message: validationError });
+  }
+
+  if (!companyId && (fromSiteId || toSiteId)) {
+    return res.status(400).json({
+      success: false,
+      message:
+        'Selected master site is not linked to a customer company. Edit the site in Sites and assign a company before saving this EOD.',
+    });
+  }
+
+  const actualTrips = body.actualTrips;
+  const plannedTrips =
+    body.plannedTrips != null && body.plannedTrips !== ''
+      ? Number(body.plannedTrips)
+      : Number(actualTrips) || 0;
+  const extraCharges = body.extraCharges ?? 0;
+  const deductions = body.deductions ?? 0;
+
+  if (ratePerTrip == null && companyId) {
+    ratePerTrip = await resolveRateForContext({ companyId, jobTypeId, vehicleId, date });
+  }
 
   const totalAmount = calculateEodTotal({
     actualTrips,
@@ -210,37 +474,97 @@ export const createEodEntry = async (req, res) => {
   });
 
   const dieselFuel =
-    req.body.dieselFuel != null && req.body.dieselFuel !== ''
-      ? req.body.dieselFuel
-      : base.dieselFuel ?? null;
-
-  const expense =
-    req.body.expense != null && req.body.expense !== '' ? req.body.expense : null;
-
-  const payload = {
-    ...base,
-    ratePerTrip,
-    actualTrips,
-    extraCharges,
-    deductions,
-    dieselFuel,
-    expense,
-    totalAmount,
-    remarks: req.body.remarks || null,
-    startTime: req.body.startTime || null,
-    endTime: req.body.endTime || null,
-    billingStatus: 'pending',
-  };
-
-  if (req.body.approved && hasPermission(req.user, 'eod_entries', 'approve')) {
-    payload.approvedBy = req.user.id;
-    payload.approvalDate = new Date();
+    body.dieselFuel != null && body.dieselFuel !== '' ? body.dieselFuel : null;
+  const expenseFields = await resolveEodExpenseFields(body);
+  if (expenseFields.error) {
+    return res.status(400).json({ success: false, message: expenseFields.error });
   }
 
-  const entry = await EodEntry.create(payload);
-  const full = await EodEntry.findByPk(entry.id, { include: eodIncludes });
+  let result;
+  try {
+    result = await sequelize.transaction(async (t) => {
+      // Race-safe duplicate guard: re-check + row-lock inside the txn so two
+      // concurrent inserts can't both pass the check.
+      const dup = await findDuplicateEodForDay(
+        { date, vehicleId, driverId, isOutsideDriver, outsideDriverName },
+        { transaction: t }
+      );
+      if (dup) {
+        const err = new Error('DUPLICATE_EOD');
+        err.code = 'DUPLICATE_EOD';
+        throw err;
+      }
 
-  res.status(201).json({ success: true, data: formatEod(full) });
+      const assignment = await JobAssignment.create(
+        {
+          assignmentDate: date,
+          companyId,
+          jobTypeId,
+          vehicleId,
+          driverId,
+          outsideDriverName,
+          outsideDriverMobile,
+          outsideDriverVehicle,
+          replacedDriverId,
+          fromSiteId,
+          toSiteId,
+          fromSiteTemp,
+          toSiteTemp,
+          expectedTrips: plannedTrips,
+          companyRate: ratePerTrip,
+          driverCost,
+          dieselFuel,
+          status: 'completed',
+          createdBy: req.user?.id ?? null,
+        },
+        { transaction: t }
+      );
+
+      const payload = {
+        assignmentId: assignment.id,
+        date,
+        companyId,
+        vehicleId,
+        driverId,
+        jobTypeId,
+        fromSiteId,
+        toSiteId,
+        plannedTrips,
+        ratePerTrip,
+        actualTrips,
+        extraCharges,
+        deductions,
+        dieselFuel,
+        expense: expenseFields.expense,
+        expenseTypeId: expenseFields.expenseTypeId,
+        totalAmount,
+        remarks: body.remarks || null,
+        startTime: body.startTime || null,
+        endTime: body.endTime || null,
+        billingStatus: 'pending',
+      };
+
+      if (body.approved && hasPermission(req.user, 'eod_entries', 'approve')) {
+        payload.approvedBy = req.user.id;
+        payload.approvalDate = new Date();
+      }
+
+      const entry = await EodEntry.create(payload, { transaction: t });
+      return entry;
+    });
+  } catch (err) {
+    if (err?.code === 'DUPLICATE_EOD') {
+      return res.status(409).json({
+        success: false,
+        message:
+          'An EOD entry already exists for this resource on the selected date. Only one entry per day is allowed.',
+      });
+    }
+    throw err;
+  }
+
+  const full = await EodEntry.findByPk(result.id, { include: eodIncludes });
+  return res.status(201).json({ success: true, data: formatEod(full) });
 };
 
 export const updateEodEntry = async (req, res) => {
@@ -266,9 +590,39 @@ export const updateEodEntry = async (req, res) => {
     entry.dieselFuel =
       req.body.dieselFuel != null && req.body.dieselFuel !== '' ? req.body.dieselFuel : null;
   }
-  if (req.body.expense !== undefined) {
-    entry.expense =
-      req.body.expense != null && req.body.expense !== '' ? req.body.expense : null;
+  if (req.body.expense !== undefined || req.body.expenseTypeId !== undefined) {
+    const expenseFields = await resolveEodExpenseFields({
+      expense: req.body.expense !== undefined ? req.body.expense : entry.expense,
+      expenseTypeId:
+        req.body.expenseTypeId !== undefined ? req.body.expenseTypeId : entry.expenseTypeId,
+    });
+    if (expenseFields.error) {
+      return res.status(400).json({ success: false, message: expenseFields.error });
+    }
+    entry.expense = expenseFields.expense;
+    entry.expenseTypeId = expenseFields.expenseTypeId;
+  }
+  if (req.body.ratePerTrip !== undefined) {
+    entry.ratePerTrip =
+      req.body.ratePerTrip != null && req.body.ratePerTrip !== ''
+        ? Number(req.body.ratePerTrip)
+        : null;
+  }
+
+  let outsideStub = null;
+  if (entry.assignmentId) {
+    outsideStub = await JobAssignment.findByPk(entry.assignmentId, {
+      attributes: [
+        'id',
+        'outsideDriverName',
+        'outsideDriverMobile',
+        'replacedDriverId',
+        'vehicleId',
+        'driverCost',
+        'fromSiteTemp',
+        'toSiteTemp',
+      ],
+    });
   }
 
   entry.totalAmount = calculateEodTotal({
@@ -287,6 +641,63 @@ export const updateEodEntry = async (req, res) => {
   }
 
   await entry.save();
+
+  if (entry.assignmentId) {
+    const stub = outsideStub ?? (await JobAssignment.findByPk(entry.assignmentId));
+    if (stub?.outsideDriverName) {
+      const mobile =
+        req.body.outsideDriverMobile !== undefined
+          ? req.body.outsideDriverMobile
+          : stub.outsideDriverMobile;
+      const vehicleId =
+        req.body.vehicleId !== undefined
+          ? req.body.vehicleId
+          : stub.vehicleId ?? entry.vehicleId;
+      const replacedDriverId =
+        req.body.replacedDriverId !== undefined
+          ? req.body.replacedDriverId
+          : stub.replacedDriverId;
+      const driverCost =
+        req.body.driverCost !== undefined ? req.body.driverCost : stub.driverCost;
+
+      const outsideError = await validateStandaloneContext({
+        jobTypeId: entry.jobTypeId,
+        companyId: entry.companyId,
+        vehicleId,
+        driverId: null,
+        isOutsideDriver: true,
+        outsideDriverName: stub.outsideDriverName,
+        outsideDriverMobile: mobile,
+        replacedDriverId,
+        driverCost,
+        fromSiteId: entry.fromSiteId,
+        toSiteId: entry.toSiteId,
+        fromSiteTemp: stub.fromSiteTemp,
+        toSiteTemp: stub.toSiteTemp,
+      });
+      if (outsideError) {
+        return res.status(400).json({ success: false, message: outsideError });
+      }
+
+      if (req.body.outsideDriverMobile !== undefined) {
+        stub.outsideDriverMobile = String(mobile).trim();
+      }
+      if (req.body.vehicleId !== undefined) {
+        stub.vehicleId = Number(vehicleId);
+        entry.vehicleId = stub.vehicleId;
+      }
+      if (req.body.replacedDriverId !== undefined) {
+        stub.replacedDriverId = Number(replacedDriverId);
+      }
+      if (req.body.driverCost !== undefined) {
+        stub.driverCost = Number(driverCost);
+      }
+      await stub.save();
+      if (req.body.vehicleId !== undefined || req.body.driverCost !== undefined) {
+        await entry.save();
+      }
+    }
+  }
 
   const full = await EodEntry.findByPk(entry.id, { include: eodIncludes });
   res.json({ success: true, data: formatEod(full) });
@@ -321,6 +732,24 @@ export const deleteEodEntry = async (req, res) => {
       message: 'Cannot delete invoiced EOD entry',
     });
   }
-  await entry.destroy();
+
+  // If this EOD was created in standalone mode it owns a hidden
+  // JobAssignment stub. Delete both together so we don't leave an
+  // orphan `completed` assignment behind.
+  const assignmentId = entry.assignmentId;
+  let stubAssignment = null;
+  if (assignmentId) {
+    stubAssignment = await JobAssignment.findOne({
+      where: { id: assignmentId, status: 'completed' },
+    });
+  }
+
+  await sequelize.transaction(async (t) => {
+    await hardDestroy(entry, { transaction: t });
+    if (stubAssignment) {
+      await hardDestroy(stubAssignment, { transaction: t });
+    }
+  });
+
   res.json({ success: true, message: 'EOD entry deleted' });
 };

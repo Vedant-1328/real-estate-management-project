@@ -1,13 +1,417 @@
 @import 'tailwindcss';
+@import './dashboard-premium.css';
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --color-brand-400: #fbbf24;
+  --color-brand-500: #f59e0b;
+  --color-brand-600: #d97706;
+  --color-surface: #0a0e1a;
+  --color-ink: #e2e8f0;
+}
 
 body {
   margin: 0;
   min-height: 100vh;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--color-ink);
+  background-color: var(--color-surface);
+  scrollbar-color: #7dd3fc #1e293b;
+  scrollbar-width: thin;
+}
+
+/* Light blue scrollbars — matches command-center theme */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #7dd3fc #1e293b;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #1e293b;
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #93c5fd 0%, #67e8f9 50%, #38bdf8 100%);
+  border-radius: 10px;
+  border: 2px solid #1e293b;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #bae6fd 0%, #7dd3fc 50%, #38bdf8 100%);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: #38bdf8;
+}
+
+*::-webkit-scrollbar-button {
+  background: #334155;
+  height: 0;
+  width: 0;
+}
+
+*::-webkit-scrollbar-corner {
+  background: #1e293b;
+}
+
+/* App shell — dark command-center canvas */
+.app-shell-bg {
+  background-color: #0a0e1a;
+  background-image:
+    radial-gradient(ellipse 100% 70% at 50% -15%, rgba(34, 211, 238, 0.09), transparent 52%),
+    radial-gradient(ellipse 70% 55% at 100% 80%, rgba(245, 158, 11, 0.07), transparent 48%),
+    radial-gradient(ellipse 50% 40% at 0% 60%, rgba(99, 102, 241, 0.05), transparent 45%),
+    linear-gradient(180deg, #0f172a 0%, #0a0e1a 45%, #080c14 100%);
+}
+
+.app-main-canvas {
+  position: relative;
+  color: #cbd5e1;
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.02) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+/* Page titles on dark canvas */
+.app-main-canvas h1.text-slate-900,
+.app-main-canvas h2.text-slate-900 {
+  color: #f1f5f9;
+}
+
+.app-main-canvas > * > .text-slate-600,
+.app-main-canvas > * > .text-slate-500 {
+  color: #94a3b8;
+}
+
+/* White surfaces keep dark text */
+.app-main-canvas .card-premium,
+.app-main-canvas .form-section,
+.app-main-canvas .billing-summary-bar {
+  color: #0f172a;
+}
+
+.app-main-canvas .card-premium .text-slate-900,
+.app-main-canvas .form-section .text-slate-900,
+.app-main-canvas .card-premium h1,
+.app-main-canvas .card-premium h2,
+.app-main-canvas .form-section h1,
+.app-main-canvas .form-section h2 {
+  color: #0f172a;
+}
+
+/* ── Login / auth pages ─────────────────────────────────────────── */
+.auth-shell__base {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #0f172a 0%, #0a0e1a 50%, #080c14 100%);
+}
+
+.auth-shell__glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.auth-shell__glow--cyan {
+  width: 420px;
+  height: 420px;
+  top: -120px;
+  left: -80px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.2), transparent 68%);
+}
+
+.auth-shell__glow--amber {
+  width: 360px;
+  height: 360px;
+  bottom: -100px;
+  right: -60px;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.14), transparent 68%);
+}
+
+.auth-shell__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.04) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, black, transparent);
+  pointer-events: none;
+}
+
+.auth-shell__eyebrow {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #22d3ee;
+}
+
+.auth-shell__title {
+  margin-top: 0.35rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.auth-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  background: rgba(15, 23, 42, 0.88);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 0 48px rgba(34, 211, 238, 0.1),
+    0 24px 64px rgba(0, 0, 0, 0.5);
+}
+
+.auth-card__accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #22d3ee, #fbbf24, #22d3ee);
+  background-size: 200% 100%;
+}
+
+.auth-card__inner {
+  padding: 2rem;
+}
+
+.auth-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.auth-input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(10, 14, 26, 0.8);
+  padding: 0.65rem 0.9rem;
+  font-size: 0.875rem;
+  color: #f1f5f9;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.auth-input::placeholder {
+  color: #64748b;
+}
+
+.auth-input:focus {
+  border-color: rgba(34, 211, 238, 0.55);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+}
+
+.auth-alert {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.12);
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: #fda4af;
+}
+
+.auth-error {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #fb7185;
+}
+
+.auth-btn-signin {
+  border: 1px solid rgba(34, 211, 238, 0.35) !important;
+  background: linear-gradient(135deg, #0e7490 0%, #0369a1 50%, #1e40af 100%) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 4px 20px rgba(34, 211, 238, 0.25) !important;
+}
+
+.auth-btn-signin:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0891b2 0%, #0284c7 50%, #2563eb 100%) !important;
+  box-shadow: 0 6px 28px rgba(34, 211, 238, 0.35) !important;
+}
+
+.auth-spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: 3px solid #334155;
+  border-top-color: #38bdf8;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Sidebar depth */
+.sidebar-premium {
+  background: linear-gradient(175deg, #0c1222 0%, #111827 45%, #0f172a 100%);
+  box-shadow: 4px 0 24px rgba(15, 23, 42, 0.25);
+}
+
+.sidebar-nav-active {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.18) 0%, rgba(245, 158, 11, 0.06) 100%);
+  box-shadow: inset 3px 0 0 0 #f59e0b;
+}
+
+/* Top bar — matches dark shell */
+.glass-header {
+  background: rgba(10, 14, 26, 0.94);
+  border-bottom: 1px solid rgba(34, 211, 238, 0.14);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.btn-header-ghost {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(30, 41, 59, 0.6);
+  color: #e2e8f0;
+}
+
+.btn-header-ghost:hover {
+  border-color: rgba(34, 211, 238, 0.4);
+  background: rgba(30, 41, 59, 0.9);
+  color: #f8fafc;
+}
+
+/* Cards */
+.card-premium {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  border-radius: 1rem;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 24px rgba(15, 23, 42, 0.06);
+  transition:
+    box-shadow 0.25s ease,
+    transform 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.card-premium:hover {
+  box-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.05),
+    0 12px 32px rgba(15, 23, 42, 0.08);
+}
+
+/* Shimmer skeleton */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    #e2e8f0 0%,
+    #f1f5f9 40%,
+    #e2e8f0 80%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.45s ease-out both;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.92);
+  }
+}
+
+.live-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
 }
 
 @layer components {
   .input-field {
-    @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50;
+    @apply w-full rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-amber-500/60 focus:ring-4 focus:ring-amber-500/10 disabled:bg-slate-50;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-slate-900/20 transition hover:from-slate-700 hover:to-slate-800 hover:shadow-lg active:scale-[0.98] disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50;
+  }
+
+  .form-section {
+    @apply rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm;
+  }
+
+  .form-section-title {
+    @apply text-xs font-bold uppercase tracking-[0.12em] text-slate-600;
+  }
+
+  .billing-summary-bar {
+    @apply flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-white px-4 py-3 text-sm;
+  }
+
+  .table-premium thead {
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  }
+
+  .table-premium thead th {
+    @apply px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-300;
+  }
+
+  .table-premium tbody tr {
+    @apply transition-colors duration-150;
+  }
+
+  .table-premium tbody tr:hover {
+    @apply bg-amber-50/30;
+  }
+
+  .table-premium tbody td {
+    @apply border-b border-slate-100/80 px-4 py-3 text-slate-700;
   }
 }
 

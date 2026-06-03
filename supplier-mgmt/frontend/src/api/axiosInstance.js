@@ -90,6 +90,11 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
+    const isLoginRequest = originalRequest?.url?.includes('/auth/login');
+
+    if (isLoginRequest) {
+      return Promise.reject(error);
+    }
 
     if (status !== 401) {
       handleNonAuthErrors(error);

@@ -1,12 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { createPayment, fetchPayableInvoices, fetchPayments } from '../../api/payments.js';
+import { fetchCompanies } from '../../api/companies.js';
+import {
+  createPartyPayment,
+  fetchPayableInvoices,
+  fetchPayments,
+  lookupPartyBalance,
+} from '../../api/payments.js';
 import Button from '../../components/Button.jsx';
 import Modal from '../../components/Modal.jsx';
 import Table from '../../components/Table.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { usePermission } from '../../hooks/usePermission.js';
 import { formatCurrency, formatDate } from '../../utils/formatters.js';
+import {
+  PAYMENT_MODE_BADGE_CLASS,
+  PAYMENT_MODE_FILTER_OPTIONS,
+  PAYMENT_MODE_OPTIONS,
+  formatPaymentModeLabel,
+} from '../../utils/paymentModes.js';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const monthStart = () => {
@@ -14,34 +26,24 @@ const monthStart = () => {
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
 };
 
-const MODE_CLASS = {
-  cash: 'bg-green-100 text-green-800',
-  bank: 'bg-blue-100 text-blue-800',
-  upi: 'bg-purple-100 text-purple-800',
-  other: 'bg-slate-100 text-slate-700',
-};
-
-const MODES = [
-  { value: 'all', label: 'All modes' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'bank', label: 'Bank' },
-  { value: 'upi', label: 'UPI' },
-  { value: 'other', label: 'Other' },
-];
-
 function PaymentBadge({ mode }) {
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${MODE_CLASS[mode] || MODE_CLASS.other}`}
+      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${PAYMENT_MODE_BADGE_CLASS[mode] || PAYMENT_MODE_BADGE_CLASS.other}`}
     >
-      {mode}
+      {formatPaymentModeLabel(mode)}
     </span>
   );
 }
 
-function RecordPaymentForm({ invoices, onSuccess, onCancel }) {
+function RecordPaymentForm({ onSuccess, onCancel }) {
   const toast = useToast();
-  const [invoiceId, setInvoiceId] = useState('');
+  const [partyName, setPartyName] = useState('');
+  const [masterParties, setMasterParties] = useState([]);
+  const [manualParties, setManualParties] = useState([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [balanceDue, setBalanceDue] = useState(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
   const [paymentDate, setPaymentDate] = useState(today());
   const [amount, setAmount] = useState('');
   const [paymentMode, setPaymentMode] = useState('bank');
@@ -49,18 +51,81 @@ function RecordPaymentForm({ invoices, onSuccess, onCancel }) {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const selected = invoices.find((i) => String(i.id) === String(invoiceId));
+  useEffect(() => {
+    let alive = true;
+
+    const loadPartyOptions = async () => {
+      try {
+        const [companiesRes, payableRes] = await Promise.all([
+          fetchCompanies({ limit: 500, status: 'active', companyType: 'customer' }),
+          fetchPayableInvoices(),
+        ]);
+        if (!alive) return;
+
+        const companies =
+          companiesRes.data?.data
+            ?.map((c) => c.companyName?.trim())
+            .filter(Boolean) ?? [];
+        const masterNames = Array.from(new Set(companies)).sort((a, b) => a.localeCompare(b));
+        setMasterParties(masterNames);
+
+        const invoiceNames =
+          payableRes.data?.data
+            ?.map((i) => i.billToLabel?.trim())
+            .filter(Boolean) ?? [];
+        const manualNames = Array.from(
+          new Set(invoiceNames.filter((name) => !masterNames.includes(name)))
+        ).sort((a, b) => a.localeCompare(b));
+        setManualParties(manualNames);
+      } catch {
+        if (!alive) return;
+        setMasterParties([]);
+        setManualParties([]);
+      }
+    };
+
+    loadPartyOptions();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
-    if (selected) {
-      setAmount(String(selected.balanceDue));
+    const name = partyName.trim();
+    if (name.length < 2) {
+      setBalanceDue(null);
+      return;
     }
-  }, [selected?.id, selected?.balanceDue]);
+
+    const timer = setTimeout(async () => {
+      setLookupLoading(true);
+      try {
+        const { data } = await lookupPartyBalance(name);
+        setBalanceDue(data.data);
+        if (data.data.found && !amount) {
+          setAmount(String(data.data.balanceDue));
+        }
+      } catch {
+        setBalanceDue(null);
+      } finally {
+        setLookupLoading(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [partyName]);
+
+  const search = partyName.trim().toLowerCase();
+  const filterNames = (names) =>
+    names.filter((name) => !search || name.toLowerCase().includes(search)).slice(0, 6);
+  const masterMatches = filterNames(masterParties);
+  const manualMatches = filterNames(manualParties);
+  const hasSuggestions = masterMatches.length > 0 || manualMatches.length > 0;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!invoiceId) {
-      toast.error('Select an invoice');
+    if (!partyName.trim()) {
+      toast.error('Enter company or person name');
       return;
     }
     if (!amount || Number(amount) <= 0) {
@@ -69,8 +134,8 @@ function RecordPaymentForm({ invoices, onSuccess, onCancel }) {
     }
     setSubmitting(true);
     try {
-      await createPayment({
-        invoiceId: Number(invoiceId),
+      await createPartyPayment({
+        partyName: partyName.trim(),
         paymentDate,
         amount: Number(amount),
         paymentMode,
@@ -89,22 +154,71 @@ function RecordPaymentForm({ invoices, onSuccess, onCancel }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700">Invoice *</label>
-        <select
+        <label className="mb-1 block text-sm font-medium text-slate-700">Company / Person *</label>
+        <input
+          type="text"
           className="input-field w-full"
-          value={invoiceId}
-          onChange={(e) => setInvoiceId(e.target.value)}
+          value={partyName}
+          onChange={(e) => setPartyName(e.target.value)}
+          onFocus={() => setSuggestionsOpen(true)}
+          onBlur={() => setTimeout(() => setSuggestionsOpen(false), 120)}
+          placeholder="Type company or person name as on invoice"
           required
-        >
-          <option value="">Select invoice</option>
-          {invoices.map((inv) => (
-            <option key={inv.id} value={inv.id}>
-              {inv.invoiceNumber} — {inv.billToLabel} (due {formatCurrency(inv.balanceDue)})
-            </option>
-          ))}
-        </select>
-        {invoices.length === 0 && (
-          <p className="mt-1 text-xs text-amber-700">No invoices with outstanding balance.</p>
+        />
+        {suggestionsOpen && hasSuggestions && (
+          <div className="mt-2 max-h-52 overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+            {masterMatches.length > 0 && (
+              <>
+                <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Master companies
+                </p>
+                {masterMatches.map((name) => (
+                  <button
+                    key={`master-${name}`}
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-100"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setPartyName(name);
+                      setSuggestionsOpen(false);
+                    }}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </>
+            )}
+            {manualMatches.length > 0 && (
+              <>
+                <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Manual invoice parties
+                </p>
+                {manualMatches.map((name) => (
+                  <button
+                    key={`manual-${name}`}
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-100"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setPartyName(name);
+                      setSuggestionsOpen(false);
+                    }}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+        {lookupLoading && (
+          <p className="mt-1 text-xs text-slate-500">Checking outstanding balance…</p>
+        )}
+        {!lookupLoading && balanceDue?.found && (
+          <p className="mt-1 text-xs text-slate-500">
+            Outstanding: {formatCurrency(balanceDue.balanceDue)} ({balanceDue.invoiceCount} invoice
+            {balanceDue.invoiceCount === 1 ? '' : 's'})
+          </p>
         )}
       </div>
       <div>
@@ -128,9 +242,9 @@ function RecordPaymentForm({ invoices, onSuccess, onCancel }) {
           onChange={(e) => setAmount(e.target.value)}
           required
         />
-        {selected && (
+        {balanceDue?.found && (
           <p className="mt-1 text-xs text-slate-500">
-            Balance due: {formatCurrency(selected.balanceDue)}
+            Balance due: {formatCurrency(balanceDue.balanceDue)}
           </p>
         )}
       </div>
@@ -141,7 +255,7 @@ function RecordPaymentForm({ invoices, onSuccess, onCancel }) {
           value={paymentMode}
           onChange={(e) => setPaymentMode(e.target.value)}
         >
-          {MODES.filter((m) => m.value !== 'all').map((m) => (
+          {PAYMENT_MODE_OPTIONS.map((m) => (
             <option key={m.value} value={m.value}>
               {m.label}
             </option>
@@ -169,7 +283,7 @@ function RecordPaymentForm({ invoices, onSuccess, onCancel }) {
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" disabled={submitting || invoices.length === 0}>
+        <Button type="submit" disabled={submitting}>
           {submitting ? 'Saving…' : 'Record Payment'}
         </Button>
       </div>
@@ -192,7 +306,6 @@ export default function PaymentList() {
   const [paymentMode, setPaymentMode] = useState('all');
 
   const [formOpen, setFormOpen] = useState(false);
-  const [payableInvoices, setPayableInvoices] = useState([]);
 
   const load = useCallback(async () => {
     if (!canView) return;
@@ -204,7 +317,7 @@ export default function PaymentList() {
         to,
         paymentMode: paymentMode === 'all' ? undefined : paymentMode,
       });
-      setPayments(data.data);
+      setPayments(data.data ?? []);
       setListTotal(data.meta?.totalAmount ?? 0);
     } catch {
       setLoadError('Failed to load payments.');
@@ -218,15 +331,7 @@ export default function PaymentList() {
     return () => clearTimeout(t);
   }, [load]);
 
-  const openRecordForm = async () => {
-    try {
-      const { data } = await fetchPayableInvoices();
-      setPayableInvoices(data.data);
-      setFormOpen(true);
-    } catch {
-      toast.error('Failed to load invoices');
-    }
-  };
+  const openRecordForm = () => setFormOpen(true);
 
   if (!canView) {
     return (
@@ -272,7 +377,7 @@ export default function PaymentList() {
             onChange={(e) => setPaymentMode(e.target.value)}
             className="min-w-[120px] rounded-lg border border-slate-300 px-3 py-2 text-sm"
           >
-            {MODES.map((m) => (
+            {PAYMENT_MODE_FILTER_OPTIONS.map((m) => (
               <option key={m.value} value={m.value}>
                 {m.label}
               </option>
@@ -321,7 +426,6 @@ export default function PaymentList() {
 
       <Modal open={formOpen} onClose={() => setFormOpen(false)} title="Record Payment" size="md">
         <RecordPaymentForm
-          invoices={payableInvoices}
           onSuccess={() => {
             setFormOpen(false);
             load();

@@ -48,7 +48,7 @@ export default function SiteList() {
   const [converting, setConverting] = useState(null);
 
   const loadCompanies = useCallback(() => {
-    fetchCompanies({ limit: 500 })
+    fetchCompanies({ limit: 500, status: 'active', companyType: 'customer' })
       .then((res) => setCompanies(res.data?.data ?? []))
       .catch(() => setCompanies([]));
   }, []);
@@ -57,7 +57,7 @@ export default function SiteList() {
     loadCompanies();
     if (canView) {
       fetchTemporarySites()
-        .then((res) => setTempSites(res.data.data))
+        .then((res) => setTempSites(res.data?.data ?? []))
         .catch(() => { });
     }
   }, [canView, loadCompanies]);
@@ -77,7 +77,7 @@ export default function SiteList() {
         status: status === 'all' ? undefined : status,
         search: search || undefined,
       });
-      setSites(data.data);
+      setSites(data.data ?? []);
     } catch {
       setLoadError('Failed to load sites.');
     } finally {
@@ -90,7 +90,7 @@ export default function SiteList() {
     setLoading(true);
     try {
       const { data } = await fetchTemporarySites();
-      setTempSites(data.data);
+      setTempSites(data.data ?? []);
     } catch {
       toast.error('Failed to load temporary sites');
     } finally {

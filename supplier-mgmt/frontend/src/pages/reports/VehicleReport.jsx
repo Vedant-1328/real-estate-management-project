@@ -20,14 +20,15 @@ export default function VehicleReport() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const generate = async () => {
     setLoading(true);
-    setGenerated(true);
+    setLoadError(null);
     try {
       const { data } = await fetchVehicleReport({ from, to });
       setRows(
-        data.data.map((r) => ({
+        (data.data ?? []).map((r) => ({
           ...r,
           revenue: formatCurrency(r.revenue),
           expenses: formatCurrency(r.expenses),
@@ -45,7 +46,12 @@ export default function VehicleReport() {
         expenses: formatCurrency(data.summary.totalExpenses),
         netEarning: formatCurrency(data.summary.totalNet),
       });
+      setGenerated(true);
     } catch {
+      setLoadError('Failed to generate report.');
+      setRows([]);
+      setSummary(null);
+      setGenerated(true);
       toast.error('Failed to generate report');
     } finally {
       setLoading(false);
@@ -64,6 +70,8 @@ export default function VehicleReport() {
       subtitle="Revenue, expenses, and net earning per vehicle"
       generated={generated}
       loading={loading}
+      error={loadError}
+      onRetry={generate}
       onGenerate={generate}
       exportFilename="vehicle-report.csv"
       columns={[

@@ -15,6 +15,12 @@ const Company = sequelize.define(
       allowNull: false,
       field: 'company_name',
     },
+    companyType: {
+      type: DataTypes.ENUM('own', 'customer'),
+      allowNull: false,
+      defaultValue: 'customer',
+      field: 'company_type',
+    },
     contactPerson: {
       type: DataTypes.STRING(150),
       allowNull: true,

@@ -18,7 +18,6 @@ export const navSections = [
   {
     label: 'Operations',
     items: [
-      { to: '/job-assignments', label: 'Job Assignments', icon: 'clipboard' },
       { to: '/eod-entries', label: 'EOD Entries', icon: 'check' },
       { to: '/daily-expenses', label: 'Daily Expenses', icon: 'wallet' },
       { to: '/outside-driver-jobs', label: 'Outside Driver Jobs', icon: 'route' },

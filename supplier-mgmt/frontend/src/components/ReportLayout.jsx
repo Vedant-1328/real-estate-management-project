@@ -13,6 +13,8 @@ export default function ReportLayout({
   loading = false,
   generated = false,
   onGenerate,
+  error = null,
+  onRetry,
   exportFilename = 'report.csv',
   emptyMessage = 'No data for the selected filters.',
 }) {
@@ -77,6 +79,15 @@ export default function ReportLayout({
 
           {loading ? (
             <p className="py-8 text-center text-sm text-slate-500">Loading…</p>
+          ) : error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-sm text-red-800">
+              <p>{error}</p>
+              {onRetry && (
+                <Button variant="secondary" className="mt-3" onClick={onRetry}>
+                  Retry
+                </Button>
+              )}
+            </div>
           ) : sortedRows.length === 0 ? (
             <p className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
               {emptyMessage}

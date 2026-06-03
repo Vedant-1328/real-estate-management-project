@@ -40,7 +40,7 @@ export default function UserList() {
 
   useEffect(() => {
     fetchRoles()
-      .then((res) => setRoles(res.data.data))
+      .then((res) => setRoles(res.data?.data ?? []))
       .catch(() => {});
   }, []);
 
@@ -54,7 +54,7 @@ export default function UserList() {
         status: status === 'all' ? undefined : status,
         search: search || undefined,
       });
-      setUsers(data.data);
+      setUsers(data.data ?? []);
     } catch {
       setLoadError('Failed to load users.');
     } finally {

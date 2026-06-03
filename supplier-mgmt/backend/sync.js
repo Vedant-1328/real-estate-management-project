@@ -10,8 +10,9 @@ dotenv.config();
 const run = async () => {
   try {
     await connectDB();
-    await sequelize.sync({ alter: true });
-    console.log('Database synced');
+    // Do not use alter:true when FIELD_ENCRYPTION_ENABLED — it can shrink TEXT columns back to DECIMAL/DATEONLY.
+    await sequelize.sync();
+    console.log('Database synced (schema unchanged; run patch-encryption-columns.js if needed)');
     await seedIfEmpty();
     await seedRolePermissionsAndUsers();
     process.exit(0);

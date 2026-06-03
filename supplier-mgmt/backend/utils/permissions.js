@@ -1,11 +1,18 @@
 import { Permission, Role, RolePermission } from '../models/index.js';
+import { decryptField, isEncrypted } from './fieldEncryption.js';
 
 export const SUPER_ADMIN_ROLE = 'Super Admin';
 
+export const plainText = (value) => {
+  if (value == null || value === '') return value;
+  const str = String(value);
+  return isEncrypted(str) ? decryptField(str) : value;
+};
+
 export const formatPermissions = (permissions = []) =>
   permissions.map((p) => ({
-    moduleName: p.moduleName,
-    action: p.action,
+    moduleName: plainText(p.moduleName),
+    action: plainText(p.action),
   }));
 
 export const loadRolePermissions = async (roleId) => {
@@ -26,9 +33,9 @@ export const loadRolePermissions = async (roleId) => {
 };
 
 export const hasPermission = (user, moduleName, action) => {
-  if (user.roleName === SUPER_ADMIN_ROLE) return true;
+  if (plainText(user.roleName) === SUPER_ADMIN_ROLE) return true;
 
   return (user.permissions || []).some(
-    (p) => p.moduleName === moduleName && p.action === action
+    (p) => plainText(p.moduleName) === moduleName && plainText(p.action) === action
   );
 };

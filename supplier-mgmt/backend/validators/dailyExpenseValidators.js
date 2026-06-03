@@ -1,4 +1,5 @@
 import { body, param, query } from 'express-validator';
+import { PAYMENT_MODES } from '../constants/paymentModes.js';
 
 export const idParam = [param('id').isInt({ min: 1 }).toInt()];
 
@@ -15,17 +16,20 @@ export const summaryRules = [
   query('to').isISO8601(),
 ];
 
-const expenseBodyRules = [
+const buildExpenseBodyRules = () => [
   body('expenseDate').isISO8601(),
   body('vehicleId').isInt({ min: 1 }).toInt(),
   body('driverId').optional({ values: 'falsy' }).isInt({ min: 1 }).toInt(),
   body('expenseTypeId').isInt({ min: 1 }).toInt(),
   body('amount').isFloat({ min: 0 }),
   body('paidBy').trim().notEmpty().withMessage('Paid by is required'),
-  body('paymentMode').isIn(['cash', 'bank', 'upi', 'other']),
+  body('paymentMode').isIn(PAYMENT_MODES),
   body('notes').optional().trim(),
 ];
 
-export const createExpenseRules = [...expenseBodyRules];
+export const createExpenseRules = buildExpenseBodyRules();
 
-export const updateExpenseRules = [...idParam, ...expenseBodyRules];
+export const updateExpenseRules = [
+  ...idParam,
+  ...buildExpenseBodyRules().map((r) => r.optional({ nullable: true })),
+];

@@ -1,7 +1,5 @@
 import api from './axiosInstance.js';
 
-export const fetchPendingEod = () => api.get('/eod-entries/pending');
-
 export const fetchEodEntries = (params) => api.get('/eod-entries', { params });
 
 export const fetchEodEntry = (id) => api.get(`/eod-entries/${id}`);

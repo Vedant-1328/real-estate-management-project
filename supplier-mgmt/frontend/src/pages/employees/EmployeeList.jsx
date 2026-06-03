@@ -66,14 +66,16 @@ export default function EmployeeList() {
   const load = useCallback(async () => {
     if (!canView) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const { data } = await fetchEmployees({
         status: status === 'all' ? undefined : status,
         employeeType: employeeType === 'all' ? undefined : employeeType,
         search: search || undefined,
       });
-      setEmployees(data.data);
+      setEmployees(data.data ?? []);
     } catch {
+      setLoadError('Failed to load employees.');
       toast.error('Failed to load employees');
     } finally {
       setLoading(false);
@@ -153,6 +155,7 @@ export default function EmployeeList() {
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
         >
           <option value="all">All Types</option>
+          <option value="driver">Driver</option>
           <option value="supervisor">Supervisor</option>
           <option value="accountant">Accountant</option>
           <option value="office_staff">Office Staff</option>

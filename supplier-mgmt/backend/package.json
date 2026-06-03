@@ -6,8 +6,17 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
-    "db:sync": "node sync.js"
+    "dev": "node --watch-path=./routes --watch-path=./controllers --watch-path=./middlewares --watch-path=./validators --watch-path=./utils --watch-path=./models --watch server.js",
+    "db:sync": "node sync.js",
+    "admin:reset": "node scripts/reset-admin-password.js",
+    "db:encrypt-columns": "node scripts/patch-encryption-columns.js",
+    "db:eod-expense-type": "node scripts/patch-eod-expense-type-id.js",
+    "db:encrypt-data": "node scripts/encrypt-existing-data.js",
+    "db:rekey-encryption": "node scripts/rekey-field-encryption.js",
+    "seed:demo": "node scripts/seed-demo-data.js",
+    "company:delete": "node scripts/cascade-delete-company.js",
+    "test:website": "node scripts/website-test.js",
+    "test:e2e": "node scripts/e2e-test.js"
   },
   "keywords": [],
   "author": "",

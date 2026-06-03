@@ -5,7 +5,7 @@ import {
   REFRESH_TOKEN_COOKIE,
   refreshCookieOptions,
 } from '../utils/cookies.js';
-import { loadRolePermissions } from '../utils/permissions.js';
+import { loadRolePermissions, plainText } from '../utils/permissions.js';
 import {
   signAccessToken,
   signRefreshToken,
@@ -17,7 +17,7 @@ const buildAuthUser = (user, role) => ({
   name: user.name,
   email: user.email,
   roleId: user.roleId,
-  roleName: role.name,
+  roleName: plainText(role.name),
 });
 
 const issueTokens = async (user, role) => {
@@ -25,7 +25,7 @@ const issueTokens = async (user, role) => {
   const payload = {
     userId: user.id,
     roleId: user.roleId,
-    roleName: role.name,
+    roleName: plainText(role.name),
   };
 
   const accessToken = signAccessToken(payload);

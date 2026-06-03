@@ -38,7 +38,7 @@ export default function VehicleExpenseSummary() {
     setLoading(true);
     try {
       const { data } = await fetchVehicleExpenseSummary({ from, to });
-      setRows(data.data);
+      setRows(data.data ?? []);
     } catch {
       toast.error('Failed to generate summary');
       setRows([]);

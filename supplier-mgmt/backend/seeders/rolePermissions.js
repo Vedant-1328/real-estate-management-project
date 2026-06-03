@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { Permission, Role, RolePermission, User } from '../models/index.js';
+import { findRoleByName } from '../utils/roleHelpers.js';
 
 const TEST_PASSWORD = 'Admin@123';
 
@@ -114,7 +115,7 @@ export const seedRolePermissionsAndUsers = async () => {
   for (const tu of testUsers) {
     const exists = await User.findOne({ where: { email: tu.email } });
     if (exists) continue;
-    const role = await Role.findOne({ where: { name: tu.role } });
+    const role = await findRoleByName(tu.role);
     if (!role) continue;
     await User.create({
       name: tu.name,

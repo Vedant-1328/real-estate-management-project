@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  cancelInvoice,
+  deleteInvoice,
   downloadInvoicePdf,
   fetchInvoice,
   updateInvoiceStatus,
@@ -12,6 +12,7 @@ import { useConfirm } from '../../components/ConfirmDialog.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { usePermission } from '../../hooks/usePermission.js';
 import { formatCurrency, formatDate } from '../../utils/formatters.js';
+import { formatPaymentModeLabel } from '../../utils/paymentModes.js';
 import RecordPaymentModal from './RecordPaymentModal.jsx';
 
 const STATUS_CLASS = {
@@ -25,6 +26,7 @@ const STATUS_CLASS = {
 
 export default function InvoiceDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
   const canEdit = usePermission('invoices', 'edit');
@@ -36,6 +38,7 @@ export default function InvoiceDetail() {
   const [loading, setLoading] = useState(true);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,19 +83,25 @@ export default function InvoiceDetail() {
     }
   };
 
-  const handleCancel = async () => {
+  const handleDelete = async () => {
+    const hasPayments = (invoice.payments || []).length > 0;
     const ok = await confirm({
-      title: 'Cancel invoice',
-      message: 'Cancel this invoice? EOD entries will return to pending billing.',
-      confirmLabel: 'Cancel invoice',
+      title: 'Delete invoice',
+      message: hasPayments
+        ? 'Delete this invoice? All recorded payments will be removed and EOD entries will return to pending billing. This cannot be undone.'
+        : 'Delete this invoice? EOD entries will return to pending billing. This cannot be undone.',
+      confirmLabel: 'Delete',
     });
     if (!ok) return;
+    setDeleting(true);
     try {
-      await cancelInvoice(id);
-      toast.success('Invoice cancelled');
-      load();
+      await deleteInvoice(id);
+      toast.success('Invoice deleted');
+      navigate('/invoices');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to cancel');
+      toast.error(err.response?.data?.message || 'Failed to delete invoice');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -106,6 +115,8 @@ export default function InvoiceDetail() {
 
   const paidTotal = (invoice.payments || []).reduce((s, p) => s + p.amount, 0);
   const statusClass = STATUS_CLASS[invoice.paymentStatus] || STATUS_CLASS.draft;
+  const canEditInvoice =
+    canEdit && !['paid', 'cancelled'].includes(invoice.paymentStatus);
 
   return (
     <div className="space-y-6">
@@ -222,13 +233,18 @@ export default function InvoiceDetail() {
               ...p,
               paymentDate: formatDate(p.paymentDate),
               amount: formatCurrency(p.amount),
-              paymentMode: p.paymentMode?.toUpperCase(),
+              paymentMode: formatPaymentModeLabel(p.paymentMode),
             }))}
           />
         )}
       </div>
 
       <div className="flex flex-wrap gap-2">
+        {canEditInvoice && (
+          <Link to={`/invoices/${id}/edit`}>
+            <Button variant="secondary">Edit Invoice</Button>
+          </Link>
+        )}
         {canPrint && (
           <Button onClick={handleDownload} disabled={pdfLoading}>
             {pdfLoading ? 'Generating PDF…' : 'Download PDF'}
@@ -239,9 +255,9 @@ export default function InvoiceDetail() {
             Mark as Sent
           </Button>
         )}
-        {canDelete && !['paid', 'partially_paid', 'cancelled'].includes(invoice.paymentStatus) && (
-          <Button variant="danger" onClick={handleCancel}>
-            Cancel Invoice
+        {canDelete && (
+          <Button variant="danger" onClick={handleDelete} disabled={deleting}>
+            {deleting ? 'Deleting…' : 'Delete Invoice'}
           </Button>
         )}
       </div>

@@ -74,6 +74,7 @@ export function defineAssociations(models) {
   JobAssignment.belongsTo(JobType, { foreignKey: 'jobTypeId', as: 'jobType' });
   JobAssignment.belongsTo(Vehicle, { foreignKey: 'vehicleId', as: 'vehicle' });
   JobAssignment.belongsTo(Driver, { foreignKey: 'driverId', as: 'driver' });
+  JobAssignment.belongsTo(Driver, { foreignKey: 'replacedDriverId', as: 'replacedDriver' });
   JobAssignment.belongsTo(Site, { foreignKey: 'fromSiteId', as: 'fromSite' });
   JobAssignment.belongsTo(Site, { foreignKey: 'toSiteId', as: 'toSite' });
   JobAssignment.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
@@ -87,6 +88,8 @@ export function defineAssociations(models) {
   EodEntry.belongsTo(Site, { foreignKey: 'fromSiteId', as: 'fromSite' });
   EodEntry.belongsTo(Site, { foreignKey: 'toSiteId', as: 'toSite' });
   EodEntry.belongsTo(User, { foreignKey: 'approvedBy', as: 'approver' });
+  EodEntry.belongsTo(ExpenseType, { foreignKey: 'expenseTypeId', as: 'expenseType' });
+  ExpenseType.hasMany(EodEntry, { foreignKey: 'expenseTypeId', as: 'eodEntries' });
 
   DailyExpense.belongsTo(Vehicle, { foreignKey: 'vehicleId', as: 'vehicle' });
   DailyExpense.belongsTo(Driver, { foreignKey: 'driverId', as: 'driver' });

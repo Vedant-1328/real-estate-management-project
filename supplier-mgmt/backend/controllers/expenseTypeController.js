@@ -1,4 +1,5 @@
-import { ExpenseType } from '../models/index.js';
+import { DailyExpense, EodEntry, ExpenseType } from '../models/index.js';
+import { hardDestroy, hardDestroyWhere } from '../utils/hardDestroy.js';
 
 export const listExpenseTypes = async (_req, res) => {
   const expenseTypes = await ExpenseType.findAll({ order: [['name', 'ASC']] });
@@ -35,6 +36,11 @@ export const deleteExpenseType = async (req, res) => {
   if (!expenseType) {
     return res.status(404).json({ success: false, message: 'Expense type not found' });
   }
-  await expenseType.destroy();
+  await hardDestroyWhere(DailyExpense, { expenseTypeId: expenseType.id });
+  await EodEntry.update(
+    { expenseTypeId: null, expense: null },
+    { where: { expenseTypeId: expenseType.id } }
+  );
+  await hardDestroy(expenseType);
   res.json({ success: true, message: 'Expense type deleted' });
 };

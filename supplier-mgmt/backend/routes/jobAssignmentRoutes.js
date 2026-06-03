@@ -9,7 +9,7 @@ import {
   updateAssignmentStatus,
 } from '../controllers/jobAssignmentController.js';
 import { authenticate } from '../middlewares/auth.js';
-import { checkPermission } from '../middlewares/rbac.js';
+import { checkAnyPermission, checkPermission } from '../middlewares/rbac.js';
 import { validate } from '../middlewares/validate.js';
 import { auditLog } from '../middlewares/auditLog.js';
 import {
@@ -25,9 +25,14 @@ const router = Router();
 
 router.use(authenticate);
 
+// The rate-card lookup is consumed by both EOD entry and Outside Driver Jobs,
+// so allow either permission to call it.
 router.get(
   '/effective-rate',
-  checkPermission('job_assignments', 'view'),
+  checkAnyPermission([
+    ['eod_entries', 'view'],
+    ['job_assignments', 'view'],
+  ]),
   effectiveRateRules,
   validate,
   getEffectiveRateForAssignment

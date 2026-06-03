@@ -2,11 +2,15 @@ import { Op } from 'sequelize';
 import {
   Company,
   Driver,
+  EodEntry,
+  Invoice,
+  InvoiceItem,
   JobAssignment,
   JobType,
   Site,
   Vehicle,
 } from '../models/index.js';
+import { hardDestroy, hardDestroyWhere } from '../utils/hardDestroy.js';
 import {
   buildConflictMessage,
   findAssignmentConflicts,
@@ -20,6 +24,7 @@ const assignmentIncludes = [
   { model: JobType, as: 'jobType', attributes: ['id', 'name'] },
   { model: Vehicle, as: 'vehicle', attributes: ['id', 'vehicleNumber', 'vehicleType'] },
   { model: Driver, as: 'driver', attributes: ['id', 'name', 'mobile'] },
+  { model: Driver, as: 'replacedDriver', attributes: ['id', 'name', 'mobile'] },
   { model: Site, as: 'fromSite', attributes: ['id', 'siteName', 'companyId'] },
   { model: Site, as: 'toSite', attributes: ['id', 'siteName', 'companyId'] },
 ];
@@ -33,6 +38,7 @@ const formatAssignment = (assignment) => {
   const fromLabel = plain.fromSite?.siteName || plain.fromSiteTemp || '—';
   const toLabel = plain.toSite?.siteName || plain.toSiteTemp || '—';
   plain.routeLabel = `${fromLabel} → ${toLabel}`;
+  plain.replacedDriverLabel = plain.replacedDriver?.name || null;
 
   return plain;
 };
@@ -50,6 +56,10 @@ const normalizePayload = (body) => {
     outsideDriverName: isOutside ? body.outsideDriverName : null,
     outsideDriverMobile: isOutside ? body.outsideDriverMobile || null : null,
     outsideDriverVehicle: isOutside ? body.outsideDriverVehicle || null : null,
+    replacedDriverId:
+      isOutside && body.replacedDriverId != null && body.replacedDriverId !== ''
+        ? Number(body.replacedDriverId)
+        : null,
     fromSiteId: body.fromSiteId || null,
     toSiteId: body.toSiteId || null,
     fromSiteTemp: body.fromSiteTemp || null,
@@ -272,6 +282,7 @@ export const updateAssignment = async (req, res) => {
     'outsideDriverName',
     'outsideDriverMobile',
     'outsideDriverVehicle',
+    'replacedDriverId',
     'fromSiteId',
     'toSiteId',
     'fromSiteTemp',
@@ -314,6 +325,44 @@ export const deleteAssignment = async (req, res) => {
     return res.status(404).json({ success: false, message: 'Assignment not found' });
   }
 
-  await assignment.destroy();
+  const eodEntries = await EodEntry.findAll({
+    where: { assignmentId: assignment.id },
+    attributes: ['id', 'billingStatus'],
+  });
+
+  if (eodEntries.length) {
+    const eodIds = eodEntries.map((e) => e.id);
+    const invoiceItems = await InvoiceItem.findAll({
+      where: { eodEntryId: { [Op.in]: eodIds } },
+      include: [
+        {
+          model: Invoice,
+          as: 'invoice',
+          attributes: ['id', 'invoiceNumber', 'paymentStatus'],
+        },
+      ],
+    });
+
+    const activeItems = invoiceItems.filter(
+      (item) => item.invoice && item.invoice.paymentStatus !== 'cancelled'
+    );
+    if (activeItems.length) {
+      const numbers = [
+        ...new Set(activeItems.map((item) => item.invoice.invoiceNumber).filter(Boolean)),
+      ];
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete: EOD for this assignment is on invoice ${numbers.join(', ')}. Cancel that invoice first.`,
+      });
+    }
+
+    if (invoiceItems.length) {
+      await hardDestroyWhere(InvoiceItem, { eodEntryId: { [Op.in]: eodIds } });
+    }
+
+    await hardDestroyWhere(EodEntry, { assignmentId: assignment.id });
+  }
+
+  await hardDestroy(assignment);
   res.json({ success: true, message: 'Assignment deleted' });
 };

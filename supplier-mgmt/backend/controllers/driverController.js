@@ -1,7 +1,9 @@
 import { Op } from 'sequelize';
-import { Driver, DriverDocument, Vehicle } from '../models/index.js';
+import { Driver, DriverAdvance, DriverDocument, Vehicle } from '../models/index.js';
+import { hardDestroy, hardDestroyWhere } from '../utils/hardDestroy.js';
 import { toPublicUploadPath } from '../middlewares/driverUpload.js';
 import { formatDriver } from '../utils/driverExpiry.js';
+import { isFieldEncryptionEnabled } from '../utils/fieldEncryption.js';
 
 const DOC_TYPE_LABELS = {
   driving_license: 'Driving License',
@@ -26,10 +28,12 @@ export const listDrivers = async (req, res) => {
   if (status && status !== 'all') where.status = status;
   if (driverType && driverType !== 'all') where.driverType = driverType;
   if (search) {
-    where[Op.or] = [
-      { name: { [Op.like]: `%${search}%` } },
-      { mobile: { [Op.like]: `%${search}%` } },
-    ];
+    const term = `%${search}%`;
+    if (isFieldEncryptionEnabled()) {
+      where.name = { [Op.like]: term };
+    } else {
+      where[Op.or] = [{ name: { [Op.like]: term } }, { mobile: { [Op.like]: term } }];
+    }
   }
 
   const drivers = await Driver.findAll({
@@ -177,7 +181,9 @@ export const deleteDriver = async (req, res) => {
   if (!driver) {
     return res.status(404).json({ success: false, message: 'Driver not found' });
   }
-  await driver.destroy();
+  await hardDestroyWhere(DriverDocument, { driverId: driver.id });
+  await hardDestroyWhere(DriverAdvance, { driverId: driver.id });
+  await hardDestroy(driver);
   res.json({ success: true, message: 'Driver deleted' });
 };
 
@@ -210,6 +216,6 @@ export const deleteDocument = async (req, res) => {
     return res.status(404).json({ success: false, message: 'Document not found' });
   }
 
-  await doc.destroy();
+  await hardDestroy(doc);
   res.json({ success: true, message: 'Document deleted' });
 };

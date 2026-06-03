@@ -3,13 +3,7 @@ import { createPayment } from '../../api/invoices.js';
 import Button from '../../components/Button.jsx';
 import Modal from '../../components/Modal.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
-
-const MODES = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'bank', label: 'Bank' },
-  { value: 'upi', label: 'UPI' },
-  { value: 'other', label: 'Other' },
-];
+import { PAYMENT_MODE_OPTIONS } from '../../utils/paymentModes.js';
 
 export default function RecordPaymentModal({ invoice, open, onClose, onSuccess }) {
   const toast = useToast();
@@ -78,7 +72,7 @@ export default function RecordPaymentModal({ invoice, open, onClose, onSuccess }
             value={paymentMode}
             onChange={(e) => setPaymentMode(e.target.value)}
           >
-            {MODES.map((m) => (
+            {PAYMENT_MODE_OPTIONS.map((m) => (
               <option key={m.value} value={m.value}>
                 {m.label}
               </option>

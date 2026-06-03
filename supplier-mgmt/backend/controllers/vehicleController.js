@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
 import { Vehicle, VehicleDocument } from '../models/index.js';
+import { hardDestroy, hardDestroyWhere } from '../utils/hardDestroy.js';
 import { toPublicUploadPath } from '../middlewares/vehicleUpload.js';
 import { attachExpiryAlerts } from '../utils/vehicleExpiry.js';
 
@@ -110,7 +111,8 @@ export const deleteVehicle = async (req, res) => {
   if (!vehicle) {
     return res.status(404).json({ success: false, message: 'Vehicle not found' });
   }
-  await vehicle.destroy();
+  await hardDestroyWhere(VehicleDocument, { vehicleId: vehicle.id });
+  await hardDestroy(vehicle);
   res.json({ success: true, message: 'Vehicle deleted' });
 };
 
@@ -143,6 +145,6 @@ export const deleteDocument = async (req, res) => {
     return res.status(404).json({ success: false, message: 'Document not found' });
   }
 
-  await doc.destroy();
+  await hardDestroy(doc);
   res.json({ success: true, message: 'Document deleted' });
 };

@@ -90,7 +90,7 @@ export default function EmployeeAdvanceList() {
 
   useEffect(() => {
     fetchEmployees({ status: 'active' })
-      .then((res) => setEmployees(res.data.data))
+      .then((res) => setEmployees(res.data?.data ?? []))
       .catch(() => {});
   }, []);
 
@@ -106,7 +106,7 @@ export default function EmployeeAdvanceList() {
         status: status === 'all' ? undefined : status,
         search: search || undefined,
       });
-      setAdvances(data.data);
+      setAdvances(data.data ?? []);
     } catch {
       toast.error('Failed to load advances');
     } finally {

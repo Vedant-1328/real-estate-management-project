@@ -24,10 +24,12 @@ export default function RoleList() {
   const load = useCallback(async () => {
     if (!canView) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const { data } = await fetchRoles();
-      setRoles(data.data);
+      setRoles(data.data ?? []);
     } catch {
+      setLoadError('Failed to load roles.');
       toast.error('Failed to load roles');
     } finally {
       setLoading(false);

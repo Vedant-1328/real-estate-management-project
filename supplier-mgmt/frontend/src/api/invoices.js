@@ -11,7 +11,12 @@ export const createInvoice = (data) => api.post('/invoices', data);
 export const updateInvoiceStatus = (id, status) =>
   api.put(`/invoices/${id}/status`, { status });
 
+export const updateInvoice = (id, data) => api.put(`/invoices/${id}`, data);
+
 export const cancelInvoice = (id) => api.delete(`/invoices/${id}`);
+
+/** @deprecated use deleteInvoice */
+export const deleteInvoice = cancelInvoice;
 
 export const fetchOutstanding = () => api.get('/invoices/outstanding');
 

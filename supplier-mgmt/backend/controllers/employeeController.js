@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
-import { Employee, EmployeeDocument } from '../models/index.js';
+import { Employee, EmployeeAdvance, EmployeeDocument } from '../models/index.js';
+import { hardDestroy, hardDestroyWhere } from '../utils/hardDestroy.js';
 import { toPublicUploadPath } from '../middlewares/employeeUpload.js';
 
 const DOC_TYPE_LABELS = {
@@ -112,7 +113,9 @@ export const deleteEmployee = async (req, res) => {
     return res.status(404).json({ success: false, message: 'Employee not found' });
   }
 
-  await employee.destroy();
+  await hardDestroyWhere(EmployeeDocument, { employeeId: employee.id });
+  await hardDestroyWhere(EmployeeAdvance, { employeeId: employee.id });
+  await hardDestroy(employee);
   res.json({ success: true, message: 'Employee deleted' });
 };
 
@@ -145,6 +148,6 @@ export const deleteDocument = async (req, res) => {
     return res.status(404).json({ success: false, message: 'Document not found' });
   }
 
-  await doc.destroy();
+  await hardDestroy(doc);
   res.json({ success: true, message: 'Document deleted' });
 };

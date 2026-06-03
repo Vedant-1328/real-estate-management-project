@@ -22,6 +22,7 @@ const schema = z
     outsideDriverName: z.string().optional(),
     outsideDriverMobile: z.string().optional(),
     outsideDriverVehicle: z.string().optional(),
+    replacedDriverId: z.string().optional(),
     fromSiteMode: z.enum(['site', 'temp']),
     fromSiteId: z.string().optional(),
     fromSiteTemp: z.string().optional(),
@@ -106,6 +107,10 @@ function buildPayload(values, forceAssign = false) {
     outsideDriverName: values.isOutsideDriver ? values.outsideDriverName : null,
     outsideDriverMobile: values.isOutsideDriver ? values.outsideDriverMobile || null : null,
     outsideDriverVehicle: values.isOutsideDriver ? values.outsideDriverVehicle || null : null,
+    replacedDriverId:
+      values.isOutsideDriver && values.replacedDriverId
+        ? Number(values.replacedDriverId)
+        : null,
     fromSiteId: values.fromSiteMode === 'site' && values.fromSiteId ? Number(values.fromSiteId) : null,
     toSiteId: values.toSiteMode === 'site' && values.toSiteId ? Number(values.toSiteId) : null,
     fromSiteTemp: values.fromSiteMode === 'temp' ? values.fromSiteTemp : null,
@@ -151,6 +156,7 @@ export default function AssignmentForm({ assignment, onSuccess, onCancel, outsid
       outsideDriverName: '',
       outsideDriverMobile: '',
       outsideDriverVehicle: '',
+      replacedDriverId: '',
       fromSiteMode: 'site',
       fromSiteId: '',
       fromSiteTemp: '',
@@ -169,18 +175,22 @@ export default function AssignmentForm({ assignment, onSuccess, onCancel, outsid
   const fromSiteMode = watch('fromSiteMode');
   const toSiteMode = watch('toSiteMode');
 
+  const fleetDrivers = drivers.filter(
+    (d) => d.driverType !== 'outside' && d.status !== 'inactive'
+  );
+
   useEffect(() => {
     fetchJobTypes()
-      .then((res) => setJobTypes(res.data.data))
+      .then((res) => setJobTypes(res.data?.data ?? []))
       .catch(() => {});
     fetchVehicles({ status: 'available' })
-      .then((res) => setVehicles(res.data.data))
+      .then((res) => setVehicles(res.data?.data ?? []))
       .catch(() => {});
-    fetchDrivers({ status: 'available' })
-      .then((res) => setDrivers(res.data.data))
+    fetchDrivers({ limit: 500 })
+      .then((res) => setDrivers(res.data?.data ?? []))
       .catch(() => {});
     fetchSites({ status: 'active' })
-      .then((res) => setSites(res.data.data))
+      .then((res) => setSites(res.data?.data ?? []))
       .catch(() => setSites([]));
   }, []);
 
@@ -195,6 +205,9 @@ export default function AssignmentForm({ assignment, onSuccess, onCancel, outsid
         outsideDriverName: assignment.outsideDriverName || '',
         outsideDriverMobile: assignment.outsideDriverMobile || '',
         outsideDriverVehicle: assignment.outsideDriverVehicle || '',
+        replacedDriverId: assignment.replacedDriverId
+          ? String(assignment.replacedDriverId)
+          : '',
         fromSiteMode: assignment.fromSiteTemp ? 'temp' : 'site',
         fromSiteId: assignment.fromSiteId ? String(assignment.fromSiteId) : '',
         fromSiteTemp: assignment.fromSiteTemp || '',
@@ -358,7 +371,21 @@ export default function AssignmentForm({ assignment, onSuccess, onCancel, outsid
                 {...register('driverCost')}
               />
             </div>
-            <div className="sm:col-span-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Replacement of
+              </label>
+              <select className="input-field" disabled={isCompleted} {...register('replacedDriverId')}>
+                <option value="">Select fleet driver</option>
+                {fleetDrivers.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                    {d.mobile ? ` · ${d.mobile}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Fleet Vehicle (optional)</label>
               <select className="input-field" disabled={isCompleted} {...register('vehicleId')}>
                 <option value="">None</option>

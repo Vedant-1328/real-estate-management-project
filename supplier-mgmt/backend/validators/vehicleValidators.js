@@ -13,23 +13,29 @@ export const listVehiclesRules = [
   query('search').optional().trim(),
 ];
 
-const vehicleBodyRules = [
+const optionalField = { values: 'falsy', nullable: true };
+
+/** Fresh chains per route — do not reuse; `.optional()` mutates the chain in place. */
+const buildVehicleBodyRules = () => [
   body('vehicleNumber').trim().notEmpty().withMessage('Vehicle number is required'),
   body('vehicleType').trim().notEmpty().withMessage('Vehicle type is required'),
   body('vehicleModel').trim().notEmpty().withMessage('Model is required'),
-  body('capacity').optional().trim(),
+  body('capacity').optional(optionalField).trim(),
   body('ownerType').isIn(['own', 'rented', 'third_party']),
-  body('insuranceExpiry').optional({ values: 'falsy' }).isISO8601(),
-  body('fitnessExpiry').optional({ values: 'falsy' }).isISO8601(),
-  body('permitExpiry').optional({ values: 'falsy' }).isISO8601(),
-  body('pollutionExpiry').optional({ values: 'falsy' }).isISO8601(),
+  body('insuranceExpiry').optional(optionalField).isISO8601().withMessage('Invalid insurance expiry date'),
+  body('fitnessExpiry').optional(optionalField).isISO8601().withMessage('Invalid fitness expiry date'),
+  body('permitExpiry').optional(optionalField).isISO8601().withMessage('Invalid permit expiry date'),
+  body('pollutionExpiry').optional(optionalField).isISO8601().withMessage('Invalid pollution expiry date'),
   body('status').isIn(['available', 'assigned', 'maintenance', 'inactive']),
-  body('notes').optional().trim(),
+  body('notes').optional(optionalField).trim(),
 ];
 
-export const createVehicleRules = vehicleBodyRules;
+export const createVehicleRules = buildVehicleBodyRules();
 
-export const updateVehicleRules = [...idParam, ...vehicleBodyRules.map((r) => r.optional())];
+export const updateVehicleRules = [
+  ...idParam,
+  ...buildVehicleBodyRules().map((r) => r.optional({ nullable: true })),
+];
 
 export const uploadDocRules = [
   ...idParam,

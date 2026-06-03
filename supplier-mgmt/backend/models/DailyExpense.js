@@ -1,6 +1,6 @@
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/db.js';
-import { modelOptions } from './baseOptions.js';
+import { encryptedValueType, modelOptions } from './baseOptions.js';
 
 const DailyExpense = sequelize.define(
   'DailyExpense',
@@ -34,7 +34,7 @@ const DailyExpense = sequelize.define(
       references: { model: 'expense_types', key: 'id' },
     },
     amount: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: false,
     },
     paidBy: {
@@ -43,9 +43,8 @@ const DailyExpense = sequelize.define(
       field: 'paid_by',
     },
     paymentMode: {
-      type: DataTypes.ENUM('cash', 'bank', 'upi', 'other'),
+      type: encryptedValueType,
       allowNull: false,
-      defaultValue: 'cash',
       field: 'payment_mode',
     },
     receiptPath: {

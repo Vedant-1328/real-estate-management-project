@@ -42,10 +42,12 @@ export default function JobTypeList() {
   const load = useCallback(async () => {
     if (!canView) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const { data } = await fetchJobTypes();
-      setItems(data.data);
+      setItems(data.data ?? []);
     } catch {
+      setLoadError('Failed to load job types.');
       toast.error('Failed to load job types');
     } finally {
       setLoading(false);

@@ -10,7 +10,11 @@ router.post(
   '/login',
   loginRateLimit,
   [
-    body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
+    body('email')
+      .trim()
+      .isEmail()
+      .withMessage('Valid email is required')
+      .normalizeEmail({ gmail_remove_dots: false }),
     body('password').notEmpty().withMessage('Password is required'),
   ],
   validate,

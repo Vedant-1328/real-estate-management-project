@@ -16,10 +16,11 @@ export default function SalaryReport() {
   const [expanded, setExpanded] = useState(null);
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const generate = async () => {
     setLoading(true);
-    setGenerated(true);
+    setLoadError(null);
     try {
       const { data } = await fetchSalaryReport({
         month: Number(month),
@@ -27,7 +28,7 @@ export default function SalaryReport() {
         type,
       });
       setRows(
-        data.data.map((r) => ({
+        (data.data ?? []).map((r) => ({
           ...r,
           id: r.driverId ?? r.employeeId,
           name: r.name,
@@ -41,7 +42,10 @@ export default function SalaryReport() {
             <button
               type="button"
               className="text-sm text-blue-600 hover:underline"
-              onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+              onClick={() => {
+                const rowId = r.driverId ?? r.employeeId;
+                setExpanded(expanded === rowId ? null : rowId);
+              }}
             >
               {r.advanceHistory?.length || 0}
             </button>
@@ -49,7 +53,11 @@ export default function SalaryReport() {
           _advanceHistory: r.advanceHistory,
         }))
       );
+      setGenerated(true);
     } catch {
+      setLoadError('Failed to generate report.');
+      setRows([]);
+      setGenerated(true);
       toast.error('Failed to generate report');
     } finally {
       setLoading(false);
@@ -87,6 +95,8 @@ export default function SalaryReport() {
         subtitle="Gross salary, advances, and net pay"
         generated={generated}
         loading={loading}
+        error={loadError}
+        onRetry={generate}
         onGenerate={generate}
         exportFilename="salary-report.csv"
         columns={columns}

@@ -12,10 +12,12 @@ import {
   Vehicle,
   sequelize,
 } from '../models/index.js';
-import { calculateEodTotal } from '../utils/eodCalculations.js';
+import { calculateEodTotal, isOutsideEodEntry } from '../utils/eodCalculations.js';
 import { calculateInvoiceTotals } from '../utils/invoiceCalculations.js';
 import { generateInvoiceNumber } from '../utils/invoiceNumber.js';
+import { sortInvoiceItemsByDate } from '../utils/encryptedAggregates.js';
 import { generateInvoicePdf } from '../utils/invoicePdf.js';
+import { hardDestroy, hardDestroyWhere } from '../utils/hardDestroy.js';
 
 const siteLabel = (site, assignment, field) => {
   if (site?.siteName) return site.siteName;
@@ -41,9 +43,19 @@ const billToParty = (plain) => {
   return plain.company || null;
 };
 
+const sanitizeDateOnly = (value) => {
+  if (value == null || value === '') return null;
+  const s = String(value).trim();
+  if (/^invalid/i.test(s)) return null;
+  return s.length >= 10 ? s.slice(0, 10) : s;
+};
+
 const formatInvoice = (invoice) => {
   const plain = invoice.get ? invoice.get({ plain: true }) : { ...invoice };
+  plain.billingPeriodFrom = sanitizeDateOnly(plain.billingPeriodFrom);
+  plain.billingPeriodTo = sanitizeDateOnly(plain.billingPeriodTo);
   [
+    'totalTrips',
     'totalAmount',
     'extraCharges',
     'discount',
@@ -65,11 +77,14 @@ const formatInvoice = (invoice) => {
     }));
   }
   if (plain.items) {
-    plain.items = plain.items.map((item) => ({
-      ...item,
-      ratePerTrip: Number(item.ratePerTrip),
-      amount: Number(item.amount),
-    }));
+    plain.items = sortInvoiceItemsByDate(
+      plain.items.map((item) => ({
+        ...item,
+        lineDate: sanitizeDateOnly(item.lineDate) ?? item.lineDate,
+        ratePerTrip: Number(item.ratePerTrip),
+        amount: Number(item.amount),
+      }))
+    );
   }
   plain.taxableAmount =
     plain.totalAmount + plain.extraCharges - plain.discount;
@@ -79,38 +94,74 @@ const formatInvoice = (invoice) => {
 };
 
 const eodInclude = [
+  { model: Company, as: 'company', attributes: ['id', 'companyName'] },
   { model: JobType, as: 'jobType', attributes: ['id', 'name'] },
   { model: Vehicle, as: 'vehicle', attributes: ['id', 'vehicleNumber'] },
   { model: Driver, as: 'driver', attributes: ['id', 'name'] },
-  { model: Site, as: 'fromSite', attributes: ['id', 'siteName'] },
-  { model: Site, as: 'toSite', attributes: ['id', 'siteName'] },
+  { model: Site, as: 'fromSite', attributes: ['id', 'siteName', 'companyId'] },
+  { model: Site, as: 'toSite', attributes: ['id', 'siteName', 'companyId'] },
   {
     model: JobAssignment,
     as: 'assignment',
-    attributes: ['id', 'fromSiteTemp', 'toSiteTemp', 'outsideDriverName', 'outsideDriverVehicle'],
+    attributes: [
+      'id',
+      'companyId',
+      'fromSiteTemp',
+      'toSiteTemp',
+      'outsideDriverName',
+      'outsideDriverVehicle',
+    ],
   },
 ];
 
+/** Effective billing customer for an EOD row (entry FK or linked sites/assignment). */
+const effectiveEodCompanyId = (plain) => {
+  const n = (v) => (v != null && v !== '' ? Number(v) : null);
+  return (
+    n(plain.companyId) ??
+    n(plain.fromSite?.companyId) ??
+    n(plain.toSite?.companyId) ??
+    n(plain.assignment?.companyId) ??
+    null
+  );
+};
+
 export const getPendingEod = async (req, res) => {
-  const { from, to } = req.query;
+  const { from, to, companyId } = req.query;
+
+  const where = {
+    billingStatus: 'pending',
+  };
+
+  if (from && to) {
+    where.date = { [Op.between]: [from, to] };
+  } else if (from) {
+    where.date = { [Op.gte]: from };
+  } else if (to) {
+    where.date = { [Op.lte]: to };
+  }
 
   const entries = await EodEntry.findAll({
-    where: {
-      date: { [Op.between]: [from, to] },
-      billingStatus: 'pending',
-      approvedBy: { [Op.ne]: null },
-    },
+    where,
     include: eodInclude,
     order: [['date', 'ASC']],
+    subQuery: false,
   });
+
+  const customerId = companyId ? Number(companyId) : null;
+  const filtered = customerId
+    ? entries.filter((e) => effectiveEodCompanyId(e.get({ plain: true })) === customerId)
+    : entries;
 
   res.json({
     success: true,
-    data: entries.map((e) => {
+    data: filtered.map((e) => {
       const plain = e.get({ plain: true });
+      const linkedCompanyId = effectiveEodCompanyId(plain);
       return {
         id: plain.id,
         date: plain.date,
+        linkedCompany: plain.company?.companyName || (linkedCompanyId ? `Company #${linkedCompanyId}` : '—'),
         jobType: plain.jobType?.name,
         vehicleNumber: vehicleLabel(plain.vehicle, plain.assignment),
         driverName: driverLabel(plain.driver, plain.assignment),
@@ -121,6 +172,8 @@ export const getPendingEod = async (req, res) => {
         extraCharges: plain.extraCharges != null ? Number(plain.extraCharges) : 0,
         deductions: plain.deductions != null ? Number(plain.deductions) : 0,
         amount: Number(plain.totalAmount),
+        isOutsideDriver: isOutsideEodEntry(plain),
+        isApproved: Boolean(plain.approvedBy),
       };
     }),
   });
@@ -132,9 +185,12 @@ export const listInvoices = async (req, res) => {
   const offset = (page - 1) * limit;
   const { companyId, paymentStatus, from, to } = req.query;
 
-  const where = { paymentStatus: { [Op.ne]: 'cancelled' } };
-  if (companyId) where.companyId = companyId;
-  if (paymentStatus && paymentStatus !== 'all') where.paymentStatus = paymentStatus;
+  const where = {};
+  if (paymentStatus && paymentStatus !== 'all') {
+    where.paymentStatus = paymentStatus;
+  } else {
+    where.paymentStatus = { [Op.ne]: 'cancelled' };
+  }
   if (from && to) {
     where.invoiceDate = { [Op.between]: [from, to] };
   } else if (from) {
@@ -143,16 +199,34 @@ export const listInvoices = async (req, res) => {
     where.invoiceDate = { [Op.lte]: to };
   }
 
-  const { count, rows } = await Invoice.findAndCountAll({
+  const queryLimit = companyId ? Math.max(limit * 5, 100) : limit;
+  const queryOffset = companyId ? 0 : offset;
+
+  let { count, rows } = await Invoice.findAndCountAll({
     where,
     include: [
       { model: Company, as: 'company', attributes: ['id', 'companyName'] },
       { model: Company, as: 'issuerCompany', attributes: ['id', 'companyName'] },
     ],
     order: [['invoiceDate', 'DESC'], ['id', 'DESC']],
-    limit,
-    offset,
+    limit: queryLimit,
+    offset: queryOffset,
   });
+
+  if (companyId) {
+    const company = await Company.findByPk(companyId, { attributes: ['companyName'] });
+    const filterName = (company?.companyName || '').trim().toLowerCase();
+    const fid = Number(companyId);
+    rows = rows.filter((inv) => {
+      const plain = inv.get({ plain: true });
+      if (plain.companyId === fid) return true;
+      const billTo = (plain.billToName || '').trim().toLowerCase();
+      if (!filterName || !billTo) return false;
+      return billTo === filterName || billTo.includes(filterName) || filterName.includes(billTo);
+    });
+    count = rows.length;
+    rows = rows.slice(offset, offset + limit);
+  }
 
   res.json({
     success: true,
@@ -221,7 +295,6 @@ export const createInvoice = async (req, res) => {
     where: {
       id: { [Op.in]: eodEntryIds },
       billingStatus: 'pending',
-      approvedBy: { [Op.ne]: null },
     },
     include: eodInclude,
   });
@@ -231,6 +304,31 @@ export const createInvoice = async (req, res) => {
       success: false,
       message: 'One or more EOD entries are invalid or already invoiced',
     });
+  }
+
+  const entryDates = entries
+    .map((e) => String(e.date ?? '').slice(0, 10))
+    .filter(Boolean)
+    .sort();
+  const resolvedBillingPeriodFrom = billingPeriodFrom || entryDates[0] || null;
+  const resolvedBillingPeriodTo =
+    billingPeriodTo || entryDates[entryDates.length - 1] || null;
+  if (!resolvedBillingPeriodFrom || !resolvedBillingPeriodTo) {
+    return res.status(400).json({
+      success: false,
+      message: 'Billing period could not be determined from selected entries',
+    });
+  }
+
+  // Mark as approved when invoicing if still pending approval (common when the
+  // afternoon EOD form was saved without the approve checkbox).
+  const now = new Date();
+  for (const entry of entries) {
+    if (!entry.approvedBy) {
+      entry.approvedBy = req.user.id;
+      entry.approvalDate = now;
+      await entry.save();
+    }
   }
 
   const lineByEntryId = new Map(
@@ -258,11 +356,46 @@ export const createInvoice = async (req, res) => {
           });
   }
 
-  const entriesSubtotal = entries.reduce((s, e) => s + Number(e.totalAmount), 0);
+  let entriesSubtotal = entries.reduce((s, e) => s + Number(e.totalAmount), 0);
   const subtotal =
     subtotalOverride != null && subtotalOverride !== ''
       ? Number(subtotalOverride)
       : entriesSubtotal;
+
+  // If the user typed a subtotal but left per-line amounts at 0 (lump-sum
+  // billing), distribute that subtotal across the lines proportionally to
+  // actualTrips so the invoice rows match the header total.
+  if (subtotal > 0 && entriesSubtotal === 0) {
+    const totalTripsForDist = entries.reduce(
+      (s, e) => s + (Number(e.actualTrips) || 0),
+      0
+    );
+    if (totalTripsForDist > 0) {
+      let allocated = 0;
+      entries.forEach((entry, idx) => {
+        const trips = Number(entry.actualTrips) || 0;
+        const isLast = idx === entries.length - 1;
+        const share = isLast
+          ? subtotal - allocated
+          : Math.round(((subtotal * trips) / totalTripsForDist) * 100) / 100;
+        entry.totalAmount = share;
+        entry.ratePerTrip = trips > 0 ? Math.round((share / trips) * 100) / 100 : 0;
+        allocated += share;
+      });
+    } else {
+      // Fallback: equal split if there are no trips
+      const equal = Math.round((subtotal / entries.length) * 100) / 100;
+      let allocated = 0;
+      entries.forEach((entry, idx) => {
+        const isLast = idx === entries.length - 1;
+        entry.totalAmount = isLast ? subtotal - allocated : equal;
+        entry.ratePerTrip = 0;
+        allocated += entry.totalAmount;
+      });
+    }
+    entriesSubtotal = subtotal;
+  }
+
   const discPct =
     discountPercent != null
       ? Number(discountPercent)
@@ -294,8 +427,8 @@ export const createInvoice = async (req, res) => {
         billToAddress: billToAddress?.trim() || null,
         billToGst: billToGst?.trim() || null,
         issuerCompanyId,
-        billingPeriodFrom,
-        billingPeriodTo,
+        billingPeriodFrom: resolvedBillingPeriodFrom,
+        billingPeriodTo: resolvedBillingPeriodTo,
         totalTrips,
         totalAmount: totals.totalAmount,
         extraCharges: totals.extraCharges,
@@ -335,7 +468,7 @@ export const createInvoice = async (req, res) => {
       };
     });
 
-    await InvoiceItem.bulkCreate(items, { transaction: t });
+    await InvoiceItem.bulkCreate(items, { transaction: t, individualHooks: true });
 
     await EodEntry.update(
       { billingStatus: 'invoiced' },
@@ -357,6 +490,183 @@ export const createInvoice = async (req, res) => {
   } catch (err) {
     await t.rollback();
     throw err;
+  }
+};
+
+const recalculateInvoicePaymentStatus = async (invoice, transaction) => {
+  const payments = await Payment.findAll({
+    where: { invoiceId: invoice.id },
+    transaction,
+  });
+  const paid = payments.reduce((s, p) => s + Number(p.amount), 0);
+  const grandTotal = Number(invoice.grandTotal);
+
+  if (invoice.paymentStatus === 'cancelled') return;
+
+  if (paid >= grandTotal - 0.005) {
+    invoice.paymentStatus = 'paid';
+  } else if (paid > 0) {
+    invoice.paymentStatus = 'partially_paid';
+  } else if (invoice.paymentStatus === 'paid' || invoice.paymentStatus === 'partially_paid') {
+    invoice.paymentStatus = 'generated';
+  }
+
+  await invoice.save({ transaction });
+};
+
+export const updateInvoice = async (req, res) => {
+  const {
+    billToName,
+    billToAddress,
+    billToGst,
+    issuerCompanyId,
+    billingPeriodFrom,
+    billingPeriodTo,
+    subtotal: subtotalOverride,
+    extraCharges = 0,
+    discountPercent,
+    cgstRate = 0,
+    sgstRate = 0,
+    notes,
+    lineItems = [],
+  } = req.body;
+
+  const invoice = await Invoice.findByPk(req.params.id, {
+    include: [{ model: InvoiceItem, as: 'items' }],
+  });
+
+  if (!invoice) {
+    return res.status(404).json({ success: false, message: 'Invoice not found' });
+  }
+
+  if (invoice.paymentStatus === 'cancelled') {
+    return res.status(400).json({ success: false, message: 'Cannot edit a cancelled invoice' });
+  }
+
+  if (invoice.paymentStatus === 'paid') {
+    return res.status(400).json({
+      success: false,
+      message: 'Cannot edit a fully paid invoice',
+    });
+  }
+
+  const issuerCompany = await Company.findByPk(issuerCompanyId);
+  if (!issuerCompany) {
+    return res.status(400).json({ success: false, message: 'Invalid bill-from company' });
+  }
+
+  const lineById = new Map(
+    (Array.isArray(lineItems) ? lineItems : []).map((li) => [Number(li.id), li])
+  );
+
+  const items = invoice.items || [];
+  if (lineItems.length > 0 && lineItems.length !== items.length) {
+    return res.status(400).json({
+      success: false,
+      message: 'Line items must include every row on this invoice',
+    });
+  }
+
+  for (const item of items) {
+    const override = lineById.get(item.id);
+    if (!override) continue;
+    if (override.ratePerTrip != null && override.ratePerTrip !== '') {
+      item.ratePerTrip = Number(override.ratePerTrip);
+    }
+    if (override.amount != null && override.amount !== '') {
+      item.amount = Number(override.amount);
+    }
+  }
+
+  let itemsSubtotal = items.reduce((s, i) => s + Number(i.amount), 0);
+  const subtotal =
+    subtotalOverride != null && subtotalOverride !== ''
+      ? Number(subtotalOverride)
+      : itemsSubtotal;
+
+  const discPct =
+    discountPercent != null
+      ? Number(discountPercent)
+      : subtotal > 0
+        ? (Number(invoice.discount) / subtotal) * 100
+        : 0;
+
+  const totals = calculateInvoiceTotals({
+    subtotal,
+    extraCharges,
+    discountPercent: discPct,
+    cgstRate,
+    sgstRate,
+  });
+
+  const payments = await Payment.findAll({ where: { invoiceId: invoice.id } });
+  const paidTotal = payments.reduce((s, p) => s + Number(p.amount), 0);
+  if (paidTotal > totals.grandTotal + 0.01) {
+    return res.status(400).json({
+      success: false,
+      message: `Grand total cannot be less than amount already paid (${paidTotal.toFixed(2)})`,
+    });
+  }
+
+  const totalTrips = items.reduce((s, i) => s + (Number(i.actualTrips) || 0), 0);
+  const t = await sequelize.transaction();
+
+  try {
+    for (const item of items) {
+      await item.save({ transaction: t });
+      const entry = await EodEntry.findByPk(item.eodEntryId, { transaction: t });
+      if (entry) {
+        entry.ratePerTrip = item.ratePerTrip;
+        entry.totalAmount = item.amount;
+        await entry.save({ transaction: t });
+      }
+    }
+
+    invoice.billToName = billToName.trim();
+    invoice.billToAddress = billToAddress?.trim() || null;
+    invoice.billToGst = billToGst?.trim() || null;
+    invoice.issuerCompanyId = issuerCompanyId;
+    invoice.billingPeriodFrom = billingPeriodFrom;
+    invoice.billingPeriodTo = billingPeriodTo;
+    invoice.totalTrips = totalTrips;
+    invoice.totalAmount = totals.totalAmount;
+    invoice.extraCharges = totals.extraCharges;
+    invoice.discount = totals.discount;
+    invoice.discountPercent = totals.discountPercent;
+    invoice.taxRate = totals.taxRate;
+    invoice.cgstRate = totals.cgstRate;
+    invoice.sgstRate = totals.sgstRate;
+    invoice.taxAmount = totals.taxAmount;
+    invoice.cgstAmount = totals.cgstAmount;
+    invoice.sgstAmount = totals.sgstAmount;
+    invoice.grandTotal = totals.grandTotal;
+    invoice.notes = notes || null;
+
+    await invoice.save({ transaction: t });
+
+    if (payments.length > 0) {
+      await recalculateInvoicePaymentStatus(invoice, t);
+    }
+
+    await t.commit();
+
+    const full = await Invoice.findByPk(invoice.id, {
+      include: [
+        { model: Company, as: 'company' },
+        { model: Company, as: 'issuerCompany' },
+        { model: InvoiceItem, as: 'items' },
+        { model: Payment, as: 'payments' },
+      ],
+    });
+
+    res.json({ success: true, data: formatInvoice(full) });
+  } catch (err) {
+    await t.rollback();
+    console.error('updateInvoice failed:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to update invoice',
+    });
   }
 };
 
@@ -396,26 +706,24 @@ export const updateInvoiceStatus = async (req, res) => {
 
 export const cancelInvoice = async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id, {
-    include: [{ model: InvoiceItem, as: 'items' }],
+    include: [
+      { model: InvoiceItem, as: 'items' },
+      { model: Payment, as: 'payments' },
+    ],
   });
 
   if (!invoice) {
     return res.status(404).json({ success: false, message: 'Invoice not found' });
   }
 
-  if (['paid', 'partially_paid'].includes(invoice.paymentStatus)) {
-    return res.status(400).json({
-      success: false,
-      message: 'Cannot cancel invoice with payments recorded',
-    });
-  }
-
-  const eodIds = (invoice.items || []).map((i) => i.eodEntryId);
+  const eodIds = (invoice.items || []).map((i) => i.eodEntryId).filter(Boolean);
+  const paymentCount = invoice.payments?.length ?? 0;
   const t = await sequelize.transaction();
 
   try {
-    invoice.paymentStatus = 'cancelled';
-    await invoice.save({ transaction: t });
+    if (paymentCount > 0) {
+      await hardDestroyWhere(Payment, { invoiceId: invoice.id }, { transaction: t });
+    }
 
     if (eodIds.length) {
       await EodEntry.update(
@@ -424,8 +732,17 @@ export const cancelInvoice = async (req, res) => {
       );
     }
 
+    await hardDestroyWhere(InvoiceItem, { invoiceId: invoice.id }, { transaction: t });
+    await hardDestroy(invoice, { transaction: t });
+
     await t.commit();
-    res.json({ success: true, message: 'Invoice cancelled' });
+    res.json({
+      success: true,
+      message:
+        paymentCount > 0
+          ? `Invoice deleted (${paymentCount} payment record(s) removed)`
+          : 'Invoice deleted',
+    });
   } catch (err) {
     await t.rollback();
     throw err;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { fetchCompanies } from '../../api/companies.js';
-import { cancelInvoice, downloadInvoicePdf, fetchInvoices } from '../../api/invoices.js';
+import { deleteInvoice, downloadInvoicePdf, fetchInvoices } from '../../api/invoices.js';
 import Button from '../../components/Button.jsx';
 import Table from '../../components/Table.jsx';
 import { useConfirm } from '../../components/ConfirmDialog.jsx';
@@ -41,6 +41,7 @@ export default function InvoiceList() {
   const confirm = useConfirm();
   const canView = usePermission('invoices', 'view');
   const canGenerate = usePermission('invoices', 'generate_invoice');
+  const canEdit = usePermission('invoices', 'edit');
   const canDelete = usePermission('invoices', 'delete');
   const canPrint = usePermission('invoices', 'print');
 
@@ -49,6 +50,7 @@ export default function InvoiceList() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(today());
@@ -56,14 +58,15 @@ export default function InvoiceList() {
   const [paymentStatus, setPaymentStatus] = useState('all');
 
   useEffect(() => {
-    fetchCompanies({ limit: 500, status: 'active' })
-      .then((res) => setCompanies(res.data.data))
+    fetchCompanies({ limit: 500, status: 'active', companyType: 'customer' })
+      .then((res) => setCompanies(res.data?.data ?? []))
       .catch(() => {});
   }, []);
 
   const load = useCallback(async () => {
     if (!canView) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const { data } = await fetchInvoices({
         from,
@@ -72,8 +75,9 @@ export default function InvoiceList() {
         paymentStatus: paymentStatus === 'all' ? undefined : paymentStatus,
         limit: 50,
       });
-      setInvoices(data.data);
+      setInvoices(data.data ?? []);
     } catch {
+      setLoadError('Failed to load invoices.');
       toast.error('Failed to load invoices');
     } finally {
       setLoading(false);
@@ -102,19 +106,26 @@ export default function InvoiceList() {
     }
   };
 
-  const handleCancel = async (row) => {
+  const handleDelete = async (row) => {
+    if (deletingId != null) return;
+    const hasPayments = ['paid', 'partially_paid'].includes(row.paymentStatus);
     const ok = await confirm({
-      title: 'Cancel invoice',
-      message: `Cancel invoice ${row.invoiceNumber}?`,
-      confirmLabel: 'Cancel invoice',
+      title: 'Delete invoice',
+      message: hasPayments
+        ? `Delete invoice ${row.invoiceNumber}? All recorded payments on this invoice will be removed and linked EOD trips will return to pending billing. This cannot be undone.`
+        : `Delete invoice ${row.invoiceNumber}? Linked EOD trips will return to pending billing. This cannot be undone.`,
+      confirmLabel: 'Delete',
     });
     if (!ok) return;
+    setDeletingId(row.id);
     try {
-      await cancelInvoice(row.id);
-      toast.success('Invoice cancelled');
-      load();
+      await deleteInvoice(row.id);
+      toast.success('Invoice deleted');
+      await load();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to cancel');
+      toast.error(err.response?.data?.message || 'Failed to delete invoice');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -185,6 +196,7 @@ export default function InvoiceList() {
             <option value="sent">Sent</option>
             <option value="partially_paid">Partially Paid</option>
             <option value="paid">Paid</option>
+            <option value="cancelled">Cancelled</option>
           </select>
         </div>
       </div>
@@ -216,13 +228,22 @@ export default function InvoiceList() {
                   >
                     View
                   </Link>
-                  {canDelete && !['paid', 'partially_paid', 'cancelled'].includes(inv.paymentStatus) && (
+                  {canEdit && !['paid', 'cancelled'].includes(inv.paymentStatus) && (
+                    <Link
+                      to={`/invoices/${inv.id}/edit`}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      Edit
+                    </Link>
+                  )}
+                  {canDelete && (
                     <button
                       type="button"
-                      className="text-sm font-medium text-red-600 hover:text-red-700"
-                      onClick={() => handleCancel(inv)}
+                      className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                      disabled={deletingId === inv.id}
+                      onClick={() => handleDelete(inv)}
                     >
-                      Cancel
+                      {deletingId === inv.id ? 'Deleting…' : 'Delete'}
                     </button>
                   )}
                   {canPrint && (

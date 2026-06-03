@@ -75,7 +75,7 @@ export default function VehicleList() {
         ownerType: ownerType === 'all' ? undefined : ownerType,
         search: search || undefined,
       });
-      setVehicles(data.data);
+      setVehicles(data.data ?? []);
     } catch {
       setLoadError('Failed to load vehicles.');
     } finally {

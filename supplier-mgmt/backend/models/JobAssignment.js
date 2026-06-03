@@ -1,6 +1,6 @@
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/db.js';
-import { modelOptions } from './baseOptions.js';
+import { encryptedValueType, modelOptions } from './baseOptions.js';
 
 const JobAssignment = sequelize.define(
   'JobAssignment',
@@ -54,6 +54,12 @@ const JobAssignment = sequelize.define(
       allowNull: true,
       field: 'outside_driver_vehicle',
     },
+    replacedDriverId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'replaced_driver_id',
+      references: { model: 'drivers', key: 'id' },
+    },
     fromSiteId: {
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: true,
@@ -77,22 +83,22 @@ const JobAssignment = sequelize.define(
       field: 'to_site_temp',
     },
     expectedTrips: {
-      type: DataTypes.INTEGER.UNSIGNED,
+      type: encryptedValueType,
       allowNull: true,
       field: 'expected_trips',
     },
     companyRate: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
       field: 'company_rate',
     },
     driverCost: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
       field: 'driver_cost',
     },
     dieselFuel: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: true,
       field: 'diesel_fuel',
     },

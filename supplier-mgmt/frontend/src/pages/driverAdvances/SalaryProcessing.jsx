@@ -50,7 +50,7 @@ export default function SalaryProcessing() {
         month: Number(month),
         year: Number(year),
       });
-      setRows(data.data);
+      setRows(data.data ?? []);
       setSelected(new Set());
     } catch {
       setLoadError('Failed to load salary summary.');

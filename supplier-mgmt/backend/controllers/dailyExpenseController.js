@@ -7,6 +7,7 @@ import {
   Vehicle,
 } from '../models/index.js';
 import { toPublicUploadPath } from '../middlewares/expenseUpload.js';
+import { hardDestroy } from '../utils/hardDestroy.js';
 
 const expenseIncludes = [
   { model: Vehicle, as: 'vehicle', attributes: ['id', 'vehicleNumber'] },
@@ -145,7 +146,7 @@ export const deleteExpense = async (req, res) => {
   if (!expense) {
     return res.status(404).json({ success: false, message: 'Expense not found' });
   }
-  await expense.destroy();
+  await hardDestroy(expense);
   res.json({ success: true, message: 'Expense deleted' });
 };
 

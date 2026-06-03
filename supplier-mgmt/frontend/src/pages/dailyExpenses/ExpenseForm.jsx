@@ -6,12 +6,7 @@ import { fetchVehicles } from '../../api/vehicles.js';
 import Button from '../../components/Button.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 
-const PAYMENT_MODES = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'bank', label: 'Bank' },
-  { value: 'upi', label: 'UPI' },
-  { value: 'other', label: 'Other' },
-];
+import { PAYMENT_MODE_OPTIONS } from '../../utils/paymentModes.js';
 
 export default function ExpenseForm({ expense, onSuccess, onCancel }) {
   const toast = useToast();
@@ -34,13 +29,13 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }) {
 
   useEffect(() => {
     fetchVehicles()
-      .then((res) => setVehicles(res.data.data))
+      .then((res) => setVehicles(res.data?.data ?? []))
       .catch(() => {});
     fetchDrivers()
-      .then((res) => setDrivers(res.data.data))
+      .then((res) => setDrivers(res.data?.data ?? []))
       .catch(() => {});
     fetchExpenseTypes()
-      .then((res) => setExpenseTypes(res.data.data))
+      .then((res) => setExpenseTypes(res.data?.data ?? []))
       .catch(() => {});
   }, []);
 
@@ -192,7 +187,7 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }) {
             value={paymentMode}
             onChange={(e) => setPaymentMode(e.target.value)}
           >
-            {PAYMENT_MODES.map((m) => (
+            {PAYMENT_MODE_OPTIONS.map((m) => (
               <option key={m.value} value={m.value}>
                 {m.label}
               </option>

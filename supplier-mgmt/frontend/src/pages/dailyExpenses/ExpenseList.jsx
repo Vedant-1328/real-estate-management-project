@@ -58,10 +58,10 @@ export default function ExpenseList() {
 
   useEffect(() => {
     fetchVehicles()
-      .then((res) => setVehicles(res.data.data))
+      .then((res) => setVehicles(res.data?.data ?? []))
       .catch(() => {});
     fetchExpenseTypes()
-      .then((res) => setExpenseTypes(res.data.data))
+      .then((res) => setExpenseTypes(res.data?.data ?? []))
       .catch(() => {});
   }, []);
 
@@ -75,7 +75,7 @@ export default function ExpenseList() {
         vehicleId: vehicleId === 'all' ? undefined : vehicleId,
         expenseTypeId: expenseTypeId === 'all' ? undefined : expenseTypeId,
       });
-      setExpenses(data.data);
+      setExpenses(data.data ?? []);
       setListTotal(data.meta?.listTotal ?? 0);
     } catch {
       setLoadError('Failed to load expenses.');

@@ -1,6 +1,6 @@
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/db.js';
-import { modelOptions } from './baseOptions.js';
+import { encryptedValueType, modelOptions } from './baseOptions.js';
 import { ADVANCE_PAYMENT_MODES, ADVANCE_STATUSES } from './DriverAdvance.js';
 
 const EmployeeAdvance = sequelize.define(
@@ -23,7 +23,7 @@ const EmployeeAdvance = sequelize.define(
       field: 'advance_date',
     },
     amount: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: encryptedValueType,
       allowNull: false,
     },
     givenBy: {
@@ -32,9 +32,8 @@ const EmployeeAdvance = sequelize.define(
       field: 'given_by',
     },
     paymentMode: {
-      type: DataTypes.ENUM(...ADVANCE_PAYMENT_MODES),
+      type: encryptedValueType,
       allowNull: false,
-      defaultValue: 'cash',
       field: 'payment_mode',
     },
     reason: {

@@ -27,26 +27,27 @@ export default function DailyJobReport() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
     Promise.all([
-      fetchCompanies(),
-      fetchDrivers(),
-      fetchVehicles(),
+      fetchCompanies({ limit: 500, status: 'active', companyType: 'customer' }),
+      fetchDrivers({ limit: 500 }),
+      fetchVehicles({ limit: 500 }),
       fetchJobTypes(),
     ])
       .then(([c, d, v, j]) => {
-        setCompanies(c.data.data);
-        setDrivers(d.data.data);
-        setVehicles(v.data.data);
-        setJobTypes(j.data.data);
+        setCompanies(c.data?.data ?? []);
+        setDrivers(d.data?.data ?? []);
+        setVehicles(v.data?.data ?? []);
+        setJobTypes(j.data?.data ?? []);
       })
       .catch(() => {});
   }, []);
 
   const generate = async () => {
     setLoading(true);
-    setGenerated(true);
+    setLoadError(null);
     try {
       const { data } = await fetchDailyJobReport({
         date,
@@ -56,7 +57,7 @@ export default function DailyJobReport() {
         jobTypeId: jobTypeId || undefined,
       });
       setRows(
-        data.data.map((r) => ({
+        (data.data ?? []).map((r) => ({
           ...r,
           billingAmount: formatCurrency(r.billingAmount),
           _billingAmount: r.billingAmount,
@@ -68,7 +69,12 @@ export default function DailyJobReport() {
         actualTrips: data.summary.totalActualTrips,
         billingAmount: formatCurrency(data.summary.totalBilling),
       });
+      setGenerated(true);
     } catch {
+      setLoadError('Failed to generate report. Check the date and try again.');
+      setRows([]);
+      setSummary(null);
+      setGenerated(true);
       toast.error('Failed to generate report');
     } finally {
       setLoading(false);
@@ -84,9 +90,11 @@ export default function DailyJobReport() {
   return (
     <ReportLayout
       title="Daily Job Report"
-      subtitle="Assignments and billing for a single day"
+      subtitle="EOD entries and billing for a single day"
       generated={generated}
       loading={loading}
+      error={loadError}
+      onRetry={generate}
       onGenerate={generate}
       exportFilename="daily-job-report.csv"
       columns={[

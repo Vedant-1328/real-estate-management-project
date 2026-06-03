@@ -2,6 +2,8 @@ import { DataTypes } from 'sequelize';
 import sequelize from '../config/db.js';
 import { modelOptions } from './baseOptions.js';
 
+export const JOB_TYPE_UNITS = ['trip', 'hour', 'day', 'fixed'];
+
 const JobType = sequelize.define(
   'JobType',
   {
@@ -11,16 +13,15 @@ const JobType = sequelize.define(
       primaryKey: true,
     },
     name: {
-      type: DataTypes.STRING(100),
+      type: DataTypes.TEXT,
       allowNull: false,
-      unique: true,
     },
     description: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
     defaultUnit: {
-      type: DataTypes.ENUM('trip', 'hour', 'day', 'fixed'),
+      type: DataTypes.TEXT,
       allowNull: false,
       defaultValue: 'trip',
       field: 'default_unit',

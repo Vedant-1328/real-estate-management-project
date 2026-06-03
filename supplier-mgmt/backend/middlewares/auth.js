@@ -1,5 +1,5 @@
 import { User, Role } from '../models/index.js';
-import { loadRolePermissions } from '../utils/permissions.js';
+import { loadRolePermissions, plainText } from '../utils/permissions.js';
 import { verifyAccessToken } from '../utils/tokens.js';
 
 export const authenticate = async (req, res, next) => {
@@ -29,7 +29,7 @@ export const authenticate = async (req, res, next) => {
       name: user.name,
       email: user.email,
       roleId: user.roleId,
-      roleName: user.role.name,
+      roleName: plainText(user.role.name),
       permissions,
     };
 

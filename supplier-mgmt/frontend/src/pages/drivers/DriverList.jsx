@@ -39,7 +39,6 @@ function LicenseExpiryCell({ driver }) {
 
 function QuickAddOutsideForm({ onSuccess, onCancel }) {
   const toast = useToast();
-  const confirm = useConfirm();
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
@@ -125,6 +124,7 @@ function QuickAddOutsideForm({ onSuccess, onCancel }) {
 
 export default function DriverList() {
   const toast = useToast();
+  const confirm = useConfirm();
   const canView = usePermission('drivers', 'view');
   const canAdd = usePermission('drivers', 'add');
   const canEdit = usePermission('drivers', 'edit');
@@ -144,14 +144,16 @@ export default function DriverList() {
   const load = useCallback(async () => {
     if (!canView) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const { data } = await fetchDrivers({
         status: status === 'all' ? undefined : status,
         driverType: driverType === 'all' ? undefined : driverType,
         search: search || undefined,
       });
-      setDrivers(data.data);
+      setDrivers(data.data ?? []);
     } catch {
+      setLoadError('Failed to load drivers.');
       toast.error('Failed to load drivers');
     } finally {
       setLoading(false);

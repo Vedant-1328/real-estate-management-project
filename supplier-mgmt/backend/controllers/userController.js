@@ -1,7 +1,9 @@
 import bcrypt from 'bcryptjs';
 import { Op } from 'sequelize';
-import { Role, User } from '../models/index.js';
+import { AuditLog, Role, User } from '../models/index.js';
+import { hardDestroy, hardDestroyWhere } from '../utils/hardDestroy.js';
 import { SUPER_ADMIN_ROLE } from '../utils/permissions.js';
+import { isFieldEncryptionEnabled } from '../utils/fieldEncryption.js';
 
 const formatUser = (user) => {
   const plain = user.get ? user.get({ plain: true }) : { ...user };
@@ -17,11 +19,16 @@ export const listUsers = async (req, res) => {
   if (roleId) where.roleId = roleId;
   if (status && status !== 'all') where.status = status;
   if (search) {
-    where[Op.or] = [
-      { name: { [Op.like]: `%${search}%` } },
-      { email: { [Op.like]: `%${search}%` } },
-      { mobile: { [Op.like]: `%${search}%` } },
-    ];
+    const term = `%${search}%`;
+    if (isFieldEncryptionEnabled()) {
+      where[Op.or] = [{ name: { [Op.like]: term } }, { email: { [Op.like]: term } }];
+    } else {
+      where[Op.or] = [
+        { name: { [Op.like]: term } },
+        { email: { [Op.like]: term } },
+        { mobile: { [Op.like]: term } },
+      ];
+    }
   }
 
   const users = await User.findAll({
@@ -138,6 +145,7 @@ export const deleteUser = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Cannot delete your own account' });
   }
 
-  await user.destroy();
+  await hardDestroyWhere(AuditLog, { userId: user.id });
+  await hardDestroy(user);
   res.json({ success: true, message: 'User deleted' });
 };
