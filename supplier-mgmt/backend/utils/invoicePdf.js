@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer';
+import { formatDisplayDate } from './dateOnly.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOGO_PATH = path.join(__dirname, '../assets/invoice-logo.png');
@@ -17,14 +18,8 @@ const getInvoiceLogoDataUri = () => {
 };
 
 const fmtDate = (d) => {
-  if (!d) return '&mdash;';
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return '&mdash;';
-  return date.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  const s = formatDisplayDate(d);
+  return s === '—' ? '&mdash;' : s;
 };
 
 const fmtMoney = (n) =>

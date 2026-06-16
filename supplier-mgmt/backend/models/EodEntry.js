@@ -32,6 +32,18 @@ const EodEntry = sequelize.define(
       field: 'vehicle_id',
       references: { model: 'vehicles', key: 'id' },
     },
+    loadedByVehicleId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'loaded_by_vehicle_id',
+      references: { model: 'vehicles', key: 'id' },
+    },
+    loadedByDriverId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'loaded_by_driver_id',
+      references: { model: 'drivers', key: 'id' },
+    },
     driverId: {
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: true,
@@ -66,6 +78,12 @@ const EodEntry = sequelize.define(
       allowNull: false,
       field: 'actual_trips',
     },
+    /** trip | hour — used when vehicle type billing is "both" */
+    quantityUnit: {
+      type: DataTypes.ENUM('trip', 'hour'),
+      allowNull: true,
+      field: 'quantity_unit',
+    },
     ratePerTrip: {
       type: encryptedValueType,
       allowNull: true,
@@ -93,6 +111,12 @@ const EodEntry = sequelize.define(
     expense: {
       type: encryptedValueType,
       allowNull: true,
+    },
+    expenseTypeId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'expense_type_id',
+      references: { model: 'expense_types', key: 'id' },
     },
     expenseTypeId: {
       type: DataTypes.INTEGER.UNSIGNED,

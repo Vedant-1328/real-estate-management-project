@@ -121,6 +121,8 @@ function CompanySection({
       </div>
 
       <Table
+        showSrNo
+        srStart={(page - 1) * limit + 1}
         loading={loading}
         error={loadError}
         onRetry={load}

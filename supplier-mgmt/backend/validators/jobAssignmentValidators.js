@@ -24,6 +24,7 @@ export const effectiveRateRules = [
   query('jobTypeId').isInt({ min: 1 }).toInt(),
   query('assignmentDate').isISO8601(),
   query('vehicleType').optional().trim(),
+  query('quantityUnit').optional().isIn(['trip', 'hour']),
 ];
 
 const buildAssignmentBodyRules = () => [

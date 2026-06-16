@@ -10,25 +10,60 @@ import {
   Site,
   User,
   Vehicle,
+  VehicleType,
 } from '../models/index.js';
 import { calculateEodTotal } from '../utils/eodCalculations.js';
-import { getEffectiveRate } from '../utils/companyRates.js';
+import { resolveEodBillingRate } from '../utils/companyRates.js';
+import {
+  getEodBillingUnit,
+  quantityLabelForUnit,
+  vehicleTypeUsesBothBilling,
+} from '../utils/eodBilling.js';
 import { hardDestroy } from '../utils/hardDestroy.js';
 import { hasPermission } from '../utils/permissions.js';
 
 import { todayDate } from '../utils/dateOnly.js';
+import { isLoaderVehicle } from '../utils/loaderVehicleTypes.js';
+
+const vehicleInclude = {
+  model: Vehicle,
+  attributes: ['id', 'vehicleNumber', 'vehicleType', 'vehicleTypeId'],
+  include: [
+    {
+      model: VehicleType,
+      as: 'vehicleTypeRef',
+      attributes: ['id', 'name', 'billingUnit'],
+    },
+  ],
+};
 
 const assignmentIncludes = [
   { model: Company, as: 'company', attributes: ['id', 'companyName'] },
   { model: JobType, as: 'jobType', attributes: ['id', 'name'] },
-  { model: Vehicle, as: 'vehicle', attributes: ['id', 'vehicleNumber', 'vehicleType'] },
+  { ...vehicleInclude, as: 'vehicle' },
   { model: Driver, as: 'driver', attributes: ['id', 'name', 'mobile'] },
   { model: Site, as: 'fromSite', attributes: ['id', 'siteName', 'companyId'] },
   { model: Site, as: 'toSite', attributes: ['id', 'siteName', 'companyId'] },
 ];
 
+const loadedByVehicleInclude = {
+  model: Vehicle,
+  as: 'loadedByVehicle',
+  attributes: ['id', 'vehicleNumber'],
+  required: false,
+};
+
+const loadedByDriverInclude = {
+  model: Driver,
+  as: 'loadedByDriver',
+  attributes: ['id', 'name'],
+  required: false,
+};
+
 const eodIncludes = [
   ...assignmentIncludes.map((inc) => ({ ...inc })),
+  loadedByVehicleInclude,
+  loadedByDriverInclude,
   {
     model: JobAssignment,
     as: 'assignment',
@@ -109,6 +144,12 @@ const formatEod = (entry) => {
     plain.driver?.name || assignment.outsideDriverName || '—';
   plain.vehicleLabel =
     plain.vehicle?.vehicleNumber || assignment.outsideDriverVehicle || '—';
+  plain.loadedByDriverLabel = plain.loadedByDriver?.name || null;
+  const loadedByParts = [
+    plain.loadedByVehicle?.vehicleNumber,
+    plain.loadedByDriver?.name,
+  ].filter(Boolean);
+  plain.loadedByLabel = loadedByParts.length ? loadedByParts.join(' · ') : null;
   plain.replacedDriverId = assignment.replacedDriverId ?? null;
   plain.replacedDriverLabel = assignment.replacedDriver?.name || null;
   plain.isOutsideDriver = Boolean(assignment.outsideDriverName);
@@ -116,7 +157,147 @@ const formatEod = (entry) => {
   plain.isApproved = Boolean(plain.approvedBy);
   plain.approverName = plain.approver?.name || null;
 
+  const masterBillingUnit = plain.vehicle?.vehicleTypeRef?.billingUnit ?? null;
+  const billingUnit = getEodBillingUnit(
+    plain.vehicle?.vehicleType,
+    masterBillingUnit,
+    plain.quantityUnit ?? null
+  );
+  plain.masterBillingUnit = masterBillingUnit;
+  plain.billingUnit = billingUnit;
+  plain.quantityLabel = quantityLabelForUnit(billingUnit);
+
   return plain;
+};
+
+const loadVehicleTypeBilling = async (vehicleId) => {
+  if (!vehicleId) return { vehicleType: null, vehicleTypeBillingUnit: null };
+  const vehicle = await Vehicle.findByPk(vehicleId, {
+    attributes: ['vehicleType', 'vehicleTypeId'],
+    include: [{ model: VehicleType, as: 'vehicleTypeRef', attributes: ['billingUnit'] }],
+  });
+  return {
+    vehicleType: vehicle?.vehicleType ?? null,
+    vehicleTypeBillingUnit: vehicle?.vehicleTypeRef?.billingUnit ?? null,
+  };
+};
+
+const resolveLoadedByVehicleId = async (loadedByVehicleId, primaryVehicleId) => {
+  if (loadedByVehicleId == null || loadedByVehicleId === '') {
+    return { loadedByVehicleId: null };
+  }
+  const id = Number(loadedByVehicleId);
+  if (!Number.isFinite(id) || id < 1) {
+    return { error: 'Invalid loaded-by vehicle' };
+  }
+  if (primaryVehicleId != null && Number(primaryVehicleId) === id) {
+    return { error: 'Loaded by must be a different vehicle than the main EOD vehicle' };
+  }
+  const loader = await Vehicle.findByPk(id, {
+    attributes: ['id', 'vehicleType', 'vehicleTypeId', 'status'],
+    include: [{ model: VehicleType, as: 'vehicleTypeRef', attributes: ['name'] }],
+  });
+  if (!loader) {
+    return { error: 'Loaded-by vehicle not found' };
+  }
+  if (loader.status === 'inactive') {
+    return { error: 'Loaded-by vehicle is inactive' };
+  }
+  if (!isLoaderVehicle(loader)) {
+    return { error: 'Loaded by must be a JCB or Hitachi vehicle' };
+  }
+  return { loadedByVehicleId: id };
+};
+
+const resolveLoadedByDriverId = async (
+  loadedByDriverId,
+  { loadedByVehicleId, primaryDriverId } = {}
+) => {
+  if (loadedByDriverId == null || loadedByDriverId === '') {
+    return { loadedByDriverId: null };
+  }
+  const id = Number(loadedByDriverId);
+  if (!Number.isFinite(id) || id < 1) {
+    return { error: 'Invalid loaded-by driver' };
+  }
+  if (!loadedByVehicleId) {
+    return { error: 'Select a loaded-by vehicle before choosing a driver' };
+  }
+  if (primaryDriverId != null && Number(primaryDriverId) === id) {
+    return { error: 'Loaded-by driver must be different from the main EOD driver' };
+  }
+  const driver = await Driver.findByPk(id, {
+    attributes: ['id', 'name', 'driverType', 'status'],
+  });
+  if (!driver) {
+    return { error: 'Loaded-by driver not found' };
+  }
+  if (driver.status === 'inactive') {
+    return { error: 'Loaded-by driver is inactive' };
+  }
+  if (driver.driverType === 'outside') {
+    return { error: 'Loaded-by driver must be a fleet driver' };
+  }
+  return { loadedByDriverId: id };
+};
+
+const resolveLoadedByFields = async (body, { primaryVehicleId, primaryDriverId } = {}) => {
+  let loadedByVehicleIdInput = body.loadedByVehicleId;
+  const loadedByDriverIdInput = body.loadedByDriverId;
+
+  if (
+    (loadedByDriverIdInput != null && loadedByDriverIdInput !== '') &&
+    (loadedByVehicleIdInput == null || loadedByVehicleIdInput === '')
+  ) {
+    const hintDriver = await Driver.findByPk(Number(loadedByDriverIdInput), {
+      attributes: ['id', 'defaultVehicleId'],
+      include: [
+        {
+          model: Vehicle,
+          as: 'defaultVehicle',
+          attributes: ['id', 'vehicleType', 'vehicleTypeId'],
+          include: [{ model: VehicleType, as: 'vehicleTypeRef', attributes: ['name'] }],
+        },
+      ],
+    });
+    const defaultVehicle = hintDriver?.defaultVehicle;
+    if (defaultVehicle && isLoaderVehicle(defaultVehicle)) {
+      loadedByVehicleIdInput = defaultVehicle.id;
+    }
+  }
+
+  const vehicle = await resolveLoadedByVehicleId(loadedByVehicleIdInput, primaryVehicleId);
+  if (vehicle?.error) return vehicle;
+
+  if (!vehicle.loadedByVehicleId) {
+    if (loadedByDriverIdInput != null && loadedByDriverIdInput !== '') {
+      return {
+        error:
+          'Select a JCB or Hitachi loader vehicle, or assign one as the driver’s default vehicle in Drivers',
+      };
+    }
+    return { loadedByVehicleId: null, loadedByDriverId: null };
+  }
+
+  const driver = await resolveLoadedByDriverId(loadedByDriverIdInput, {
+    loadedByVehicleId: vehicle.loadedByVehicleId,
+    primaryDriverId,
+  });
+  if (driver?.error) return driver;
+
+  return {
+    loadedByVehicleId: vehicle.loadedByVehicleId,
+    loadedByDriverId: driver.loadedByDriverId,
+  };
+};
+
+const resolveQuantityUnit = async ({ quantityUnit, vehicleId }) => {
+  if (quantityUnit === 'hour' || quantityUnit === 'trip') return quantityUnit;
+  const { vehicleTypeBillingUnit } = await loadVehicleTypeBilling(vehicleId);
+  if (vehicleTypeBillingUnit === 'hour') return 'hour';
+  if (vehicleTypeBillingUnit === 'trip') return 'trip';
+  if (vehicleTypeBillingUnit === 'both') return 'trip';
+  return null;
 };
 
 const buildEodFromAssignment = (assignment) => {
@@ -176,19 +357,17 @@ export const getEodEntry = async (req, res) => {
   res.json({ success: true, data: formatEod(entry) });
 };
 
-// Resolve the per-trip rate for a job context using company rate cards.
+// Resolve billing rate from company rate cards (per-hour for JCB vehicles).
 // Returns null when no matching rate card exists.
-const resolveRateForContext = async ({ companyId, jobTypeId, vehicleId, date }) => {
+const resolveRateForContext = async ({ companyId, jobTypeId, vehicleId, date, quantityUnit }) => {
   if (!companyId || !jobTypeId) return null;
-  let vehicleType = null;
-  if (vehicleId) {
-    const vehicle = await Vehicle.findByPk(vehicleId, { attributes: ['vehicleType'] });
-    vehicleType = vehicle?.vehicleType ?? null;
-  }
-  const rate = await getEffectiveRate({
+  const { vehicleType, vehicleTypeBillingUnit } = await loadVehicleTypeBilling(vehicleId);
+  const rate = await resolveEodBillingRate({
     companyId,
     jobTypeId,
     vehicleType,
+    vehicleTypeBillingUnit,
+    quantityUnit: quantityUnit ?? null,
     asOfDate: date,
   });
   return rate ? Number(rate.rateAmount) : null;
@@ -349,12 +528,26 @@ export const createEodEntry = async (req, res) => {
     let ratePerTrip =
       body.ratePerTrip != null && body.ratePerTrip !== '' ? Number(body.ratePerTrip) : null;
 
+    const { vehicleTypeBillingUnit: legacyMasterUnit } = await loadVehicleTypeBilling(
+      base.vehicleId
+    );
+    if (vehicleTypeUsesBothBilling(legacyMasterUnit) && !body.quantityUnit) {
+      return res.status(400).json({
+        success: false,
+        message: 'Select whether this entry is billed per hour or per trip',
+      });
+    }
+    const quantityUnit = await resolveQuantityUnit({
+      quantityUnit: body.quantityUnit,
+      vehicleId: base.vehicleId,
+    });
     if (ratePerTrip == null && base.companyId) {
       ratePerTrip = await resolveRateForContext({
         companyId: base.companyId,
         jobTypeId: base.jobTypeId,
         vehicleId: base.vehicleId,
         date: base.date,
+        quantityUnit,
       });
     }
 
@@ -374,8 +567,17 @@ export const createEodEntry = async (req, res) => {
       return res.status(400).json({ success: false, message: expenseFields.error });
     }
 
+    const loadedBy = await resolveLoadedByFields(body, {
+      primaryVehicleId: base.vehicleId,
+      primaryDriverId: base.driverId,
+    });
+    if (loadedBy?.error) {
+      return res.status(400).json({ success: false, message: loadedBy.error });
+    }
+
     const payload = {
       ...base,
+      quantityUnit,
       ratePerTrip,
       actualTrips,
       extraCharges,
@@ -387,6 +589,8 @@ export const createEodEntry = async (req, res) => {
       remarks: body.remarks || null,
       startTime: body.startTime || null,
       endTime: body.endTime || null,
+      loadedByVehicleId: loadedBy.loadedByVehicleId,
+      loadedByDriverId: loadedBy.loadedByDriverId,
       billingStatus: 'pending',
     };
 
@@ -462,8 +666,26 @@ export const createEodEntry = async (req, res) => {
   const extraCharges = body.extraCharges ?? 0;
   const deductions = body.deductions ?? 0;
 
+  const { vehicleTypeBillingUnit } = await loadVehicleTypeBilling(vehicleId);
+  if (vehicleTypeUsesBothBilling(vehicleTypeBillingUnit) && !body.quantityUnit) {
+    return res.status(400).json({
+      success: false,
+      message: 'Select whether this entry is billed per hour or per trip',
+    });
+  }
+  const quantityUnit = await resolveQuantityUnit({
+    quantityUnit: body.quantityUnit,
+    vehicleId,
+  });
+
   if (ratePerTrip == null && companyId) {
-    ratePerTrip = await resolveRateForContext({ companyId, jobTypeId, vehicleId, date });
+    ratePerTrip = await resolveRateForContext({
+      companyId,
+      jobTypeId,
+      vehicleId,
+      date,
+      quantityUnit,
+    });
   }
 
   const totalAmount = calculateEodTotal({
@@ -478,6 +700,14 @@ export const createEodEntry = async (req, res) => {
   const expenseFields = await resolveEodExpenseFields(body);
   if (expenseFields.error) {
     return res.status(400).json({ success: false, message: expenseFields.error });
+  }
+
+  const loadedBy = await resolveLoadedByFields(body, {
+    primaryVehicleId: vehicleId,
+    primaryDriverId: driverId,
+  });
+  if (loadedBy?.error) {
+    return res.status(400).json({ success: false, message: loadedBy.error });
   }
 
   let result;
@@ -530,6 +760,7 @@ export const createEodEntry = async (req, res) => {
         fromSiteId,
         toSiteId,
         plannedTrips,
+        quantityUnit,
         ratePerTrip,
         actualTrips,
         extraCharges,
@@ -541,6 +772,8 @@ export const createEodEntry = async (req, res) => {
         remarks: body.remarks || null,
         startTime: body.startTime || null,
         endTime: body.endTime || null,
+        loadedByVehicleId: loadedBy.loadedByVehicleId,
+        loadedByDriverId: loadedBy.loadedByDriverId,
         billingStatus: 'pending',
       };
 
@@ -580,6 +813,12 @@ export const updateEodEntry = async (req, res) => {
     });
   }
 
+  if (req.body.quantityUnit !== undefined) {
+    entry.quantityUnit =
+      req.body.quantityUnit === 'hour' || req.body.quantityUnit === 'trip'
+        ? req.body.quantityUnit
+        : null;
+  }
   if (req.body.actualTrips !== undefined) entry.actualTrips = req.body.actualTrips;
   if (req.body.extraCharges !== undefined) entry.extraCharges = req.body.extraCharges ?? 0;
   if (req.body.deductions !== undefined) entry.deductions = req.body.deductions ?? 0;
@@ -607,6 +846,33 @@ export const updateEodEntry = async (req, res) => {
       req.body.ratePerTrip != null && req.body.ratePerTrip !== ''
         ? Number(req.body.ratePerTrip)
         : null;
+  }
+  if (
+    req.body.loadedByVehicleId !== undefined ||
+    req.body.loadedByDriverId !== undefined
+  ) {
+    const primaryVehicleId =
+      req.body.vehicleId !== undefined ? req.body.vehicleId : entry.vehicleId;
+    const primaryDriverId =
+      req.body.driverId !== undefined ? req.body.driverId : entry.driverId;
+    const loadedBy = await resolveLoadedByFields(
+      {
+        loadedByVehicleId:
+          req.body.loadedByVehicleId !== undefined
+            ? req.body.loadedByVehicleId
+            : entry.loadedByVehicleId,
+        loadedByDriverId:
+          req.body.loadedByDriverId !== undefined
+            ? req.body.loadedByDriverId
+            : entry.loadedByDriverId,
+      },
+      { primaryVehicleId, primaryDriverId }
+    );
+    if (loadedBy?.error) {
+      return res.status(400).json({ success: false, message: loadedBy.error });
+    }
+    entry.loadedByVehicleId = loadedBy.loadedByVehicleId;
+    entry.loadedByDriverId = loadedBy.loadedByDriverId;
   }
 
   let outsideStub = null;

@@ -112,6 +112,7 @@ export default function ExpenseTypeList() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <Table
+            showSrNo
             loading={loading}
             error={loadError}
             onRetry={load}

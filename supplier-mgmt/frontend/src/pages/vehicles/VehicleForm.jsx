@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { fetchVehicleTypes } from '../../api/vehicleTypes.js';
 import {
   createVehicle,
   deleteVehicleDocument,
@@ -26,7 +27,7 @@ const DOC_TYPES = [
 
 const schema = z.object({
   vehicleNumber: z.string().min(1, 'Vehicle number is required'),
-  vehicleType: z.string().min(1, 'Vehicle type is required'),
+  vehicleTypeId: z.coerce.number().min(1, 'Vehicle type is required'),
   vehicleModel: z.string().min(1, 'Model is required'),
   capacity: z.string().optional(),
   ownerType: z.enum(['own', 'rented', 'third_party']),
@@ -46,19 +47,30 @@ export default function VehicleForm({ vehicle, onSuccess, onCancel }) {
   const isEdit = Boolean(vehicle?.id);
 
   const [documents, setDocuments] = useState([]);
+  const [vehicleTypes, setVehicleTypes] = useState([]);
   const [docType, setDocType] = useState('rc_book');
   const [uploading, setUploading] = useState(false);
+
+  const [vehicleTypeId, setVehicleTypeId] = useState('');
+
+  const selectedVehicleType = useMemo(
+    () => vehicleTypes.find((vt) => String(vt.id) === String(vehicleTypeId)),
+    [vehicleTypes, vehicleTypeId]
+  );
+
+  const showCapacity = Boolean(selectedVehicleType?.showsCapacity);
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
       vehicleNumber: '',
-      vehicleType: '',
+      vehicleTypeId: '',
       vehicleModel: '',
       capacity: '',
       ownerType: 'own',
@@ -82,10 +94,24 @@ export default function VehicleForm({ vehicle, onSuccess, onCancel }) {
   }, [vehicle?.id, toast]);
 
   useEffect(() => {
+    fetchVehicleTypes({ status: 'active' })
+      .then((res) => setVehicleTypes(res.data?.data ?? []))
+      .catch(() => setVehicleTypes([]));
+  }, []);
+
+  useEffect(() => {
+    if (!showCapacity) {
+      setValue('capacity', '');
+    }
+  }, [showCapacity, setValue]);
+
+  useEffect(() => {
     if (vehicle) {
+      const typeId = vehicle.vehicleTypeId || vehicle.vehicleTypeRef?.id || '';
+      setVehicleTypeId(typeId ? String(typeId) : '');
       reset({
         vehicleNumber: vehicle.vehicleNumber || '',
-        vehicleType: vehicle.vehicleType || '',
+        vehicleTypeId: typeId,
         vehicleModel: vehicle.vehicleModel || '',
         capacity: vehicle.capacity || '',
         ownerType: vehicle.ownerType || 'own',
@@ -98,15 +124,20 @@ export default function VehicleForm({ vehicle, onSuccess, onCancel }) {
       });
       loadDocuments();
     } else {
+      setVehicleTypeId('');
       reset();
       setDocuments([]);
     }
   }, [vehicle, reset, loadDocuments]);
 
   const onSubmit = async (values) => {
+    if (showCapacity && !values.capacity?.trim()) {
+      toast.error('Capacity is required for dumper vehicles');
+      return;
+    }
     const payload = {
       ...values,
-      capacity: values.capacity || null,
+      capacity: showCapacity && values.capacity?.trim() ? values.capacity.trim() : null,
       insuranceExpiry: values.insuranceExpiry || null,
       fitnessExpiry: values.fitnessExpiry || null,
       permitExpiry: values.permitExpiry || null,
@@ -185,8 +216,30 @@ export default function VehicleForm({ vehicle, onSuccess, onCancel }) {
           <label className="mb-1 block text-sm font-medium text-slate-700">
             Vehicle Type <span className="text-red-500">*</span>
           </label>
-          <input className="input-field" placeholder="Tipper, Truck…" {...register('vehicleType')} />
-          {err('vehicleType')}
+          <select
+            className="input-field"
+            {...register('vehicleTypeId', {
+              onChange: (e) => setVehicleTypeId(e.target.value),
+            })}
+          >
+            <option value="">Select type…</option>
+            {vehicleTypes.map((vt) => (
+              <option key={vt.id} value={vt.id}>
+                {vt.name}
+                {vt.billingUnit === 'hour'
+                  ? ' (hourly)'
+                  : vt.billingUnit === 'both'
+                  ? ' (hour or trip)'
+                  : ''}
+              </option>
+            ))}
+          </select>
+          {vehicleTypes.length === 0 && (
+            <p className="mt-1 text-xs text-amber-700">
+              Add types under Masters → Vehicle Types first.
+            </p>
+          )}
+          {err('vehicleTypeId')}
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">
@@ -195,10 +248,15 @@ export default function VehicleForm({ vehicle, onSuccess, onCancel }) {
           <input className="input-field" {...register('vehicleModel')} />
           {err('vehicleModel')}
         </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Capacity</label>
-          <input className="input-field" placeholder="e.g. 16 Ton" {...register('capacity')} />
-        </div>
+        {showCapacity && (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Capacity <span className="text-red-500">*</span>
+            </label>
+            <input className="input-field" placeholder="e.g. 16 Ton" {...register('capacity')} />
+            {err('capacity')}
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">
             Owner Type <span className="text-red-500">*</span>

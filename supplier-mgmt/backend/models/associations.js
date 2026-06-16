@@ -8,6 +8,7 @@ export function defineAssociations(models) {
     JobType,
     CompanyJobRate,
     Vehicle,
+    VehicleType,
     Driver,
     Employee,
     Site,
@@ -57,6 +58,9 @@ export function defineAssociations(models) {
   Company.hasMany(Site, { foreignKey: 'companyId', as: 'sites' });
   Site.belongsTo(Company, { foreignKey: 'companyId', as: 'company' });
 
+  VehicleType.hasMany(Vehicle, { foreignKey: 'vehicleTypeId', as: 'vehicles' });
+  Vehicle.belongsTo(VehicleType, { foreignKey: 'vehicleTypeId', as: 'vehicleTypeRef' });
+
   Vehicle.hasMany(Driver, { foreignKey: 'defaultVehicleId', as: 'defaultDrivers' });
   Driver.belongsTo(Vehicle, { foreignKey: 'defaultVehicleId', as: 'defaultVehicle' });
 
@@ -83,6 +87,8 @@ export function defineAssociations(models) {
   EodEntry.belongsTo(JobAssignment, { foreignKey: 'assignmentId', as: 'assignment' });
   EodEntry.belongsTo(Company, { foreignKey: 'companyId', as: 'company' });
   EodEntry.belongsTo(Vehicle, { foreignKey: 'vehicleId', as: 'vehicle' });
+  EodEntry.belongsTo(Vehicle, { foreignKey: 'loadedByVehicleId', as: 'loadedByVehicle' });
+  EodEntry.belongsTo(Driver, { foreignKey: 'loadedByDriverId', as: 'loadedByDriver' });
   EodEntry.belongsTo(Driver, { foreignKey: 'driverId', as: 'driver' });
   EodEntry.belongsTo(JobType, { foreignKey: 'jobTypeId', as: 'jobType' });
   EodEntry.belongsTo(Site, { foreignKey: 'fromSiteId', as: 'fromSite' });

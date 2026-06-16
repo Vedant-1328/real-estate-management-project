@@ -56,7 +56,8 @@ export const createEodRules = [
   body('toSiteTemp').optional({ values: 'falsy' }).trim().isLength({ max: 255 }),
   body('plannedTrips').optional({ values: 'falsy' }).isInt({ min: 0 }).toInt(),
 
-  body('actualTrips').isInt({ min: 0 }).toInt(),
+  body('quantityUnit').optional({ values: 'falsy' }).isIn(['trip', 'hour']),
+  body('actualTrips').isFloat({ min: 0 }).toFloat(),
   body('extraCharges').optional({ values: 'falsy' }).isFloat({ min: 0 }),
   body('deductions').optional({ values: 'falsy' }).isFloat({ min: 0 }),
   body('dieselFuel').optional({ values: 'falsy' }).isFloat({ min: 0 }),
@@ -66,11 +67,14 @@ export const createEodRules = [
   body('startTime').optional().trim(),
   body('endTime').optional().trim(),
   body('approved').optional().isBoolean().toBoolean(),
+  body('loadedByVehicleId').optional({ values: 'null' }).isInt({ min: 1 }).toInt(),
+  body('loadedByDriverId').optional({ values: 'null' }).isInt({ min: 1 }).toInt(),
 ];
 
 export const updateEodRules = [
   ...idParam,
-  body('actualTrips').optional().isInt({ min: 0 }).toInt(),
+  body('quantityUnit').optional({ values: 'falsy' }).isIn(['trip', 'hour']),
+  body('actualTrips').optional().isFloat({ min: 0 }).toFloat(),
   body('extraCharges').optional({ values: 'falsy' }).isFloat({ min: 0 }),
   body('deductions').optional({ values: 'falsy' }).isFloat({ min: 0 }),
   body('dieselFuel').optional({ values: 'falsy' }).isFloat({ min: 0 }),
@@ -86,4 +90,6 @@ export const updateEodRules = [
   body('replacedDriverId').optional({ values: 'falsy' }).isInt({ min: 1 }).toInt(),
   body('driverCost').optional({ values: 'falsy' }).isFloat({ min: 0.01 }),
   body('ratePerTrip').optional({ values: 'falsy' }).isFloat({ min: 0 }),
+  body('loadedByVehicleId').optional({ values: 'null' }).isInt({ min: 1 }).toInt(),
+  body('loadedByDriverId').optional({ values: 'null' }).isInt({ min: 1 }).toInt(),
 ];

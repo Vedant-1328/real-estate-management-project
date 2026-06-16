@@ -219,6 +219,7 @@ export default function SiteList() {
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <Table
+              showSrNo
               loading={loading}
               error={loadError}
               onRetry={loadMaster}
@@ -285,6 +286,7 @@ export default function SiteList() {
       {tab === 'temporary' && (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <Table
+            showSrNo
             loading={loading}
             error={loadError}
             onRetry={loadTemp}

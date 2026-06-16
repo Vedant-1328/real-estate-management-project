@@ -9,6 +9,7 @@ import Company from './Company.js';
 import JobType from './JobType.js';
 import CompanyJobRate from './CompanyJobRate.js';
 import Vehicle from './Vehicle.js';
+import VehicleType from './VehicleType.js';
 import Driver from './Driver.js';
 import Employee from './Employee.js';
 import Site from './Site.js';
@@ -37,6 +38,7 @@ const models = {
   JobType,
   CompanyJobRate,
   Vehicle,
+  VehicleType,
   Driver,
   Employee,
   Site,
@@ -69,6 +71,7 @@ export {
   JobType,
   CompanyJobRate,
   Vehicle,
+  VehicleType,
   Driver,
   Employee,
   Site,

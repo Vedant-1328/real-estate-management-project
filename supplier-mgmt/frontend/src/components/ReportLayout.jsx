@@ -114,7 +114,7 @@ export default function ReportLayout({
                     {columns.map((col) => (
                       <td
                         key={col.key}
-                        className="border border-slate-300 px-3 py-2 text-slate-800"
+                        className="border border-slate-600/50 px-3 py-2 text-slate-100"
                       >
                         {row[col.key] ?? '—'}
                       </td>

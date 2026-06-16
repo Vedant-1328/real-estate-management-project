@@ -18,7 +18,8 @@ const optionalField = { values: 'falsy', nullable: true };
 /** Fresh chains per route — do not reuse; `.optional()` mutates the chain in place. */
 const buildVehicleBodyRules = () => [
   body('vehicleNumber').trim().notEmpty().withMessage('Vehicle number is required'),
-  body('vehicleType').trim().notEmpty().withMessage('Vehicle type is required'),
+  body('vehicleTypeId').optional({ values: 'falsy' }).isInt({ min: 1 }).toInt(),
+  body('vehicleType').optional({ values: 'falsy' }).trim(),
   body('vehicleModel').trim().notEmpty().withMessage('Model is required'),
   body('capacity').optional(optionalField).trim(),
   body('ownerType').isIn(['own', 'rented', 'third_party']),

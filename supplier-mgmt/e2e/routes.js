@@ -3,6 +3,7 @@ export const NAV_PAGES = [
   { path: '/dashboard', heading: /Dashboard/i },
   { path: '/companies', heading: /Companies/i },
   { path: '/job-types', heading: /Job Types/i },
+  { path: '/vehicle-types', heading: /Vehicle Types/i },
   { path: '/vehicles', heading: /Vehicles/i },
   { path: '/drivers', heading: /Drivers/i },
   { path: '/employees', heading: /Employees/i },

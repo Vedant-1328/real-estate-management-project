@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { Vehicle, VehicleDocument } from '../models/index.js';
+import { Vehicle, VehicleDocument, VehicleType } from '../models/index.js';
 import { hardDestroy, hardDestroyWhere } from '../utils/hardDestroy.js';
 import { toPublicUploadPath } from '../middlewares/vehicleUpload.js';
 import { attachExpiryAlerts } from '../utils/vehicleExpiry.js';
@@ -11,6 +11,24 @@ const DOC_TYPE_LABELS = {
   fitness_certificate: 'Fitness Certificate',
   pollution_certificate: 'Pollution Certificate',
   other: 'Other',
+};
+
+const vehicleTypeInclude = {
+  model: VehicleType,
+  as: 'vehicleTypeRef',
+  attributes: ['id', 'name', 'billingUnit', 'showsCapacity', 'status'],
+};
+
+const resolveVehicleTypeFields = async (body) => {
+  if (body.vehicleTypeId != null && body.vehicleTypeId !== '') {
+    const vt = await VehicleType.findByPk(Number(body.vehicleTypeId));
+    if (!vt) return { error: 'Invalid vehicle type' };
+    return { vehicleTypeId: vt.id, vehicleType: vt.name };
+  }
+  const name = body.vehicleType != null ? String(body.vehicleType).trim() : '';
+  if (!name) return { error: 'Vehicle type is required' };
+  const vt = await VehicleType.findOne({ where: { name } });
+  return { vehicleTypeId: vt?.id ?? null, vehicleType: name };
 };
 
 const formatDocument = (doc) => {
@@ -34,6 +52,7 @@ export const listVehicles = async (req, res) => {
 
   const vehicles = await Vehicle.findAll({
     where,
+    include: [vehicleTypeInclude],
     order: [['vehicleNumber', 'ASC']],
   });
 
@@ -44,9 +63,15 @@ export const listVehicles = async (req, res) => {
 };
 
 export const createVehicle = async (req, res) => {
+  const typeFields = await resolveVehicleTypeFields(req.body);
+  if (typeFields.error) {
+    return res.status(400).json({ success: false, message: typeFields.error });
+  }
+
   const vehicle = await Vehicle.create({
     vehicleNumber: req.body.vehicleNumber,
-    vehicleType: req.body.vehicleType,
+    vehicleTypeId: typeFields.vehicleTypeId,
+    vehicleType: typeFields.vehicleType,
     vehicleModel: req.body.vehicleModel,
     capacity: req.body.capacity || null,
     ownerType: req.body.ownerType,
@@ -63,7 +88,7 @@ export const createVehicle = async (req, res) => {
 
 export const getVehicle = async (req, res) => {
   const vehicle = await Vehicle.findByPk(req.params.id, {
-    include: [{ model: VehicleDocument, as: 'documents' }],
+    include: [{ model: VehicleDocument, as: 'documents' }, vehicleTypeInclude],
   });
 
   if (!vehicle) {
@@ -82,9 +107,17 @@ export const updateVehicle = async (req, res) => {
     return res.status(404).json({ success: false, message: 'Vehicle not found' });
   }
 
+  if (req.body.vehicleTypeId !== undefined || req.body.vehicleType !== undefined) {
+    const typeFields = await resolveVehicleTypeFields(req.body);
+    if (typeFields.error) {
+      return res.status(400).json({ success: false, message: typeFields.error });
+    }
+    vehicle.vehicleTypeId = typeFields.vehicleTypeId;
+    vehicle.vehicleType = typeFields.vehicleType;
+  }
+
   const fields = [
     'vehicleNumber',
-    'vehicleType',
     'vehicleModel',
     'capacity',
     'ownerType',

@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import {
   ExpenseType,
   JobType,
+  VehicleType,
   Permission,
   Role,
   RolePermission,
@@ -16,6 +17,7 @@ export const MODULES = [
   'roles',
   'companies',
   'job_types',
+  'vehicle_types',
   'vehicles',
   'drivers',
   'employees',
@@ -46,6 +48,17 @@ const JOB_TYPES = [
   { name: 'Debris', description: 'Debris removal', defaultUnit: 'trip' },
   { name: 'Yellow Soil', description: 'Yellow soil hauling', defaultUnit: 'trip' },
   { name: 'Mix Soil', description: 'Mixed soil hauling', defaultUnit: 'trip' },
+];
+
+const VEHICLE_TYPES = [
+  { name: 'Tipper', description: 'Tipper truck', billingUnit: 'trip', showsCapacity: false },
+  { name: 'Truck', description: 'Standard truck', billingUnit: 'trip', showsCapacity: false },
+  { name: 'Dumper', description: 'Dumper — capacity required on vehicle', billingUnit: 'trip', showsCapacity: true },
+  { name: 'Hyva', description: 'Hyva', billingUnit: 'trip', showsCapacity: false },
+  { name: 'JCB', description: 'JCB — billed by hour', billingUnit: 'hour', showsCapacity: false },
+  { name: 'Hitachi', description: 'Hitachi — billed by hour', billingUnit: 'hour', showsCapacity: false },
+  { name: 'Poclain', description: 'Poclain excavator', billingUnit: 'hour', showsCapacity: false },
+  { name: 'Tractor', description: 'Tractor', billingUnit: 'trip', showsCapacity: false },
 ];
 
 const EXPENSE_TYPES = [
@@ -91,6 +104,11 @@ export const seedIfEmpty = async () => {
   await JobType.bulkCreate(JOB_TYPES.map((jt) => ({ ...jt, status: 'active' })), {
     individualHooks: true,
   });
+
+  await VehicleType.bulkCreate(
+    VEHICLE_TYPES.map((vt) => ({ ...vt, status: 'active' })),
+    { individualHooks: true }
+  );
 
   await ExpenseType.bulkCreate(
     EXPENSE_TYPES.map((name) => ({ name, status: 'active' }))

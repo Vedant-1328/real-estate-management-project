@@ -16,6 +16,12 @@ const Vehicle = sequelize.define(
       unique: true,
       field: 'vehicle_number',
     },
+    vehicleTypeId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'vehicle_type_id',
+      references: { model: 'vehicle_types', key: 'id' },
+    },
     vehicleType: {
       type: DataTypes.STRING(80),
       allowNull: true,

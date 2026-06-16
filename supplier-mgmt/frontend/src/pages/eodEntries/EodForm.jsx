@@ -13,6 +13,16 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { usePermission } from '../../hooks/usePermission.js';
 import { formatCurrency } from '../../utils/formatters.js';
 import { todayDate as todayIso } from '../../utils/dateOnly.js';
+import {
+  getEodBillingUnit,
+  quantityLabelForUnit,
+  rateLabelForUnit,
+  vehicleTypeUsesBothBilling,
+} from '../../utils/eodBilling.js';
+import { isLoaderVehicle } from '../../utils/loaderVehicleTypes.js';
+
+const driverDefaultVehicleId = (d) =>
+  d?.defaultVehicleId ?? d?.defaultVehicle?.id ?? null;
 
 const buildFormDefaults = (entry) => {
   if (!entry) {
@@ -40,8 +50,11 @@ const buildFormDefaults = (entry) => {
       expense: '',
       remarks: '',
       startTime: '',
-      endTime: '13:00',
+      endTime: '',
       approved: true,
+      eodQuantityUnit: 'trip',
+      loadedByVehicleId: '',
+      loadedByDriverId: '',
     };
   }
 
@@ -89,6 +102,17 @@ const buildFormDefaults = (entry) => {
     startTime: entry.startTime || '',
     endTime: entry.endTime || '',
     approved: Boolean(entry.isApproved),
+    eodQuantityUnit: entry.quantityUnit === 'hour' ? 'hour' : 'trip',
+    loadedByVehicleId: entry.loadedByVehicleId
+      ? String(entry.loadedByVehicleId)
+      : entry.loadedByVehicle?.id
+      ? String(entry.loadedByVehicle.id)
+      : '',
+    loadedByDriverId: entry.loadedByDriverId
+      ? String(entry.loadedByDriverId)
+      : entry.loadedByDriver?.id
+      ? String(entry.loadedByDriver.id)
+      : '',
   };
 };
 
@@ -283,17 +307,35 @@ export default function EodForm({ entry, onSuccess, onCancel }) {
     };
     const vehicle = vehicles.find((v) => String(v.id) === values.vehicleId);
     if (vehicle?.vehicleType) params.vehicleType = vehicle.vehicleType;
+    const masterUnit = vehicle?.vehicleTypeRef?.billingUnit ?? null;
+    if (vehicleTypeUsesBothBilling(masterUnit)) {
+      params.quantityUnit = values.eodQuantityUnit || 'trip';
+    }
+    const unit = getEodBillingUnit(
+      vehicle?.vehicleType ?? null,
+      masterUnit,
+      vehicleTypeUsesBothBilling(masterUnit) ? values.eodQuantityUnit : null
+    );
 
     fetchEffectiveRate(params)
       .then((res) => {
         if (cancelled) return;
-        const rate = res.data?.data?.rateAmount;
+        const card = res.data?.data;
+        const rate = card?.rateAmount;
         if (rate != null) {
           setAutoRate(Number(rate));
-          setAutoRateNote(`Rate per trip: ${formatCurrency(rate)} (from company rate card)`);
+          let note = `${rateLabelForUnit(unit)}: ${formatCurrency(rate)} (from company rate card)`;
+          if (unit === 'hours' && card.rateType && card.rateType !== 'per_hour') {
+            note += ' — add a per-hour rate for this vehicle type under Company Rates.';
+          }
+          setAutoRateNote(note);
         } else {
           setAutoRate(null);
-          setAutoRateNote('No matching rate card configured for this site & job type.');
+          setAutoRateNote(
+            unit === 'hours'
+              ? 'No per-hour rate card for this customer, job type, and JCB vehicle.'
+              : 'No matching rate card configured for this customer & job type.'
+          );
         }
       })
       .catch(() => {
@@ -312,10 +354,97 @@ export default function EodForm({ entry, onSuccess, onCancel }) {
     values.fromSiteId,
     values.toSiteId,
     values.companyId,
+    values.eodQuantityUnit,
     vehicles,
   ]);
 
   const billingRate = autoRate;
+
+  const selectedVehicle = useMemo(
+    () => vehicles.find((v) => String(v.id) === values.vehicleId),
+    [vehicles, values.vehicleId]
+  );
+
+  const loaderVehicles = useMemo(
+    () =>
+      vehicles.filter(
+        (v) =>
+          v.status !== 'inactive' &&
+          isLoaderVehicle(v) &&
+          String(v.id) !== String(values.vehicleId)
+      ),
+    [vehicles, values.vehicleId]
+  );
+
+  const showLoadedBy = Boolean(values.vehicleId && selectedVehicle && !isLoaderVehicle(selectedVehicle));
+
+  const loaderVehicleIdSet = useMemo(
+    () => new Set(loaderVehicles.map((v) => String(v.id))),
+    [loaderVehicles]
+  );
+
+  const loadedByDriverOptions = useMemo(() => {
+    if (!showLoadedBy) return [];
+
+    const driversOnLoaders = fleetDrivers.filter((d) => {
+      const vid = driverDefaultVehicleId(d);
+      return vid != null && loaderVehicleIdSet.has(String(vid));
+    });
+
+    if (values.loadedByVehicleId) {
+      const forVehicle = driversOnLoaders.filter(
+        (d) => String(driverDefaultVehicleId(d)) === String(values.loadedByVehicleId)
+      );
+      if (forVehicle.length > 0) return forVehicle;
+    }
+
+    if (driversOnLoaders.length > 0) return driversOnLoaders;
+    return fleetDrivers;
+  }, [showLoadedBy, fleetDrivers, loaderVehicleIdSet, values.loadedByVehicleId]);
+
+  useEffect(() => {
+    if (!showLoadedBy) {
+      setValues((prev) =>
+        prev.loadedByVehicleId || prev.loadedByDriverId
+          ? { ...prev, loadedByVehicleId: '', loadedByDriverId: '' }
+          : prev
+      );
+    }
+  }, [showLoadedBy]);
+
+  useEffect(() => {
+    if (!values.loadedByDriverId || loadedByDriverOptions.length === 0) return;
+    const stillValid = loadedByDriverOptions.some(
+      (d) => String(d.id) === values.loadedByDriverId
+    );
+    if (!stillValid) {
+      setValues((prev) => ({ ...prev, loadedByDriverId: '' }));
+    }
+  }, [values.loadedByVehicleId, values.loadedByDriverId, loadedByDriverOptions]);
+
+  const masterBillingUnit = useMemo(
+    () =>
+      selectedVehicle?.vehicleTypeRef?.billingUnit ??
+      entry?.vehicle?.vehicleTypeRef?.billingUnit ??
+      entry?.masterBillingUnit ??
+      null,
+    [selectedVehicle, entry]
+  );
+
+  const allowsBothBilling = vehicleTypeUsesBothBilling(masterBillingUnit);
+
+  const billingUnit = useMemo(() => {
+    if (entry?.billingUnit && !allowsBothBilling) return entry.billingUnit;
+    return getEodBillingUnit(
+      selectedVehicle?.vehicleType ?? entry?.vehicle?.vehicleType ?? null,
+      masterBillingUnit,
+      allowsBothBilling ? values.eodQuantityUnit : entry?.quantityUnit ?? null
+    );
+  }, [entry, selectedVehicle, masterBillingUnit, allowsBothBilling, values.eodQuantityUnit]);
+
+  const isHoursBilling = billingUnit === 'hours';
+  const quantityLabel = quantityLabelForUnit(billingUnit);
+  const rateUnitSuffix = isHoursBilling ? 'hr' : 'trip';
 
   const totalAmount = useMemo(() => {
     const trips = Number(values.trips) || 0;
@@ -352,8 +481,11 @@ export default function EodForm({ entry, onSuccess, onCancel }) {
     if (values.toSiteMode === 'temp' && !values.toSiteTemp.trim()) {
       return 'To site (temp) is required';
     }
+    if (allowsBothBilling && !values.eodQuantityUnit) {
+      return 'Select bill by hour or trip';
+    }
     if (values.trips === '' || Number(values.trips) < 0) {
-      return 'Trips is required';
+      return `${quantityLabel} is required`;
     }
     if (!isEdit && !billingCompanyId) {
       return 'Select a customer company for billing';
@@ -373,14 +505,20 @@ export default function EodForm({ entry, onSuccess, onCancel }) {
     // We omit them from the payload so the backend keeps the existing values
     // intact instead of zeroing them out.
     const editOnlyFields = {
+      ...(allowsBothBilling ? { quantityUnit: values.eodQuantityUnit } : {}),
       actualTrips: tripsValue,
       dieselFuel: values.dieselFuel !== '' ? Number(values.dieselFuel) : null,
       expense: values.expense !== '' ? Number(values.expense) : null,
+      expenseTypeId: values.expenseTypeId ? Number(values.expenseTypeId) : null,
       expenseTypeId: values.expenseTypeId ? Number(values.expenseTypeId) : null,
       remarks: values.remarks || null,
       startTime: values.startTime || null,
       endTime: values.endTime || null,
       approved: canApprove ? values.approved : false,
+      loadedByVehicleId:
+        showLoadedBy && values.loadedByVehicleId ? Number(values.loadedByVehicleId) : null,
+      loadedByDriverId:
+        showLoadedBy && values.loadedByDriverId ? Number(values.loadedByDriverId) : null,
       ...(values.isOutsideDriver
         ? {
             vehicleId: Number(values.vehicleId),
@@ -467,7 +605,7 @@ export default function EodForm({ entry, onSuccess, onCancel }) {
     <form onSubmit={handleSubmit} className="space-y-4">
       {!isEdit && (
         <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          One entry per vehicle per day · afternoon check-in (default end time 1:00 PM)
+          One entry per vehicle per day · afternoon check-in (end time optional)
         </p>
       )}
 
@@ -483,7 +621,7 @@ export default function EodForm({ entry, onSuccess, onCancel }) {
           Bill rate:{' '}
           <span className="text-slate-900">
             {displayBillingRate != null
-              ? `${formatCurrency(displayBillingRate)}/trip`
+              ? `${formatCurrency(displayBillingRate)}/${rateUnitSuffix}`
               : '—'}
           </span>
         </span>
@@ -696,6 +834,92 @@ export default function EodForm({ entry, onSuccess, onCancel }) {
           </div>
         </div>
       )}
+
+      {showLoadedBy && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Loaded by (vehicle)
+            </label>
+            <select
+              className="input-field"
+              value={values.loadedByVehicleId}
+              onChange={(e) => {
+                const nextVehicleId = e.target.value;
+                setValues((prev) => ({
+                  ...prev,
+                  loadedByVehicleId: nextVehicleId,
+                  loadedByDriverId: '',
+                }));
+              }}
+              disabled={locked}
+            >
+              <option value="">Select JCB or Hitachi (optional)</option>
+              {loaderVehicles.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.vehicleNumber}
+                  {v.vehicleTypeRef?.name || v.vehicleType
+                    ? ` · ${v.vehicleTypeRef?.name || v.vehicleType}`
+                    : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Loaded by (driver)
+            </label>
+            <select
+              className="input-field"
+              value={values.loadedByDriverId}
+              onChange={(e) => {
+                const driverId = e.target.value;
+                if (!driverId) {
+                  setField('loadedByDriverId', '');
+                  return;
+                }
+                const driver = loadedByDriverOptions.find(
+                  (d) => String(d.id) === driverId
+                );
+                const loaderVid = driver ? driverDefaultVehicleId(driver) : null;
+                setValues((prev) => ({
+                  ...prev,
+                  loadedByDriverId: driverId,
+                  loadedByVehicleId:
+                    loaderVid && loaderVehicleIdSet.has(String(loaderVid))
+                      ? String(loaderVid)
+                      : prev.loadedByVehicleId,
+                }));
+              }}
+              disabled={locked || loadedByDriverOptions.length === 0}
+            >
+              <option value="">
+                {loadedByDriverOptions.length === 0
+                  ? 'No fleet drivers available'
+                  : 'Select driver (optional)'}
+              </option>
+              {loadedByDriverOptions.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                  {d.mobile ? ` · ${d.mobile}` : ''}
+                  {driverDefaultVehicleId(d)
+                    ? (() => {
+                        const v = vehicles.find(
+                          (veh) =>
+                            String(veh.id) === String(driverDefaultVehicleId(d))
+                        );
+                        return v?.vehicleNumber ? ` · ${v.vehicleNumber}` : '';
+                      })()
+                    : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs text-slate-500 sm:col-span-2">
+            JCB or Hitachi that loaded this vehicle, and the driver who operated it.
+          </p>
+        </div>
+      )}
       </FormSection>
 
       <FormSection
@@ -790,21 +1014,57 @@ export default function EodForm({ entry, onSuccess, onCancel }) {
       </FormSection>
 
       <FormSection
-        title="Trips & amount"
+        title={isHoursBilling ? 'Hours & amount' : 'Trips & amount'}
         description={
-          values.isOutsideDriver
-            ? 'Customer billing uses trips × company rate (above). Driver pay per day is your cost to the outside hire.'
+          allowsBothBilling
+            ? 'This vehicle type can be billed per hour or per trip. Choose how this entry should be billed, then enter the quantity.'
+            : values.isOutsideDriver
+            ? isHoursBilling
+              ? 'Customer billing uses hours × per-hour company rate (above). Driver pay per day is your cost to the outside hire.'
+              : 'Customer billing uses trips × company rate (above). Driver pay per day is your cost to the outside hire.'
+            : isHoursBilling
+            ? 'Hourly vehicles are billed using the per-hour rate card shown above.'
             : 'Trips are billed using the company rate card shown above.'
         }
       >
+        {allowsBothBilling && !isEdit && (
+          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+            <p className="mb-2 text-sm font-medium text-slate-700">Bill this entry by</p>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="radio"
+                  name="eodQuantityUnit"
+                  value="trip"
+                  checked={values.eodQuantityUnit === 'trip'}
+                  onChange={() => setField('eodQuantityUnit', 'trip')}
+                  disabled={locked}
+                />
+                Per trip
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="radio"
+                  name="eodQuantityUnit"
+                  value="hour"
+                  checked={values.eodQuantityUnit === 'hour'}
+                  onChange={() => setField('eodQuantityUnit', 'hour')}
+                  disabled={locked}
+                />
+                Per hour
+              </label>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
-              Trips <span className="text-red-500">*</span>
+              {quantityLabel} <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
               min="0"
+              step={isHoursBilling ? '0.25' : '1'}
               className="input-field text-lg font-semibold"
               value={values.trips}
               onChange={(e) => setField('trips', e.target.value)}
@@ -827,13 +1087,14 @@ export default function EodForm({ entry, onSuccess, onCancel }) {
         </div>
         {!isEdit && (
           <p className="text-sm text-slate-600">
-            {Number(values.trips) || 0} trip{Number(values.trips) === 1 ? '' : 's'} ×{' '}
-            {displayBillingRate != null ? formatCurrency(displayBillingRate) : '—'} ={' '}
+            {Number(values.trips) || 0} {isHoursBilling ? 'hr' : `trip${Number(values.trips) === 1 ? '' : 's'}`}{' '}
+            × {displayBillingRate != null ? formatCurrency(displayBillingRate) : '—'} ={' '}
             <strong className="text-emerald-700">{formatCurrency(totalAmount)}</strong>
             {values.isOutsideDriver && driverPayPerDay != null && (
               <span className="text-slate-500">
                 {' '}
-                · Driver cost: {formatCurrency(driverPayPerDay)}/day (not multiplied by trips)
+                · Driver cost: {formatCurrency(driverPayPerDay)}/day (not multiplied by{' '}
+                {isHoursBilling ? 'hours' : 'trips'})
               </span>
             )}
           </p>
@@ -945,3 +1206,4 @@ export default function EodForm({ entry, onSuccess, onCancel }) {
     </form>
   );
 }
+

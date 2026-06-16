@@ -9,6 +9,7 @@ import {
   updateCompanyRate,
 } from '../../api/companies.js';
 import { fetchJobTypes } from '../../api/jobTypes.js';
+import { fetchVehicleTypes } from '../../api/vehicleTypes.js';
 import Badge from '../../components/Badge.jsx';
 import Button from '../../components/Button.jsx';
 import SlideOver from '../../components/SlideOver.jsx';
@@ -42,6 +43,7 @@ export default function CompanyRates({ company, open, onClose }) {
 
   const [rates, setRates] = useState([]);
   const [jobTypes, setJobTypes] = useState([]);
+  const [vehicleTypes, setVehicleTypes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -67,6 +69,9 @@ export default function CompanyRates({ company, open, onClose }) {
       fetchJobTypes()
         .then((res) => setJobTypes(res.data?.data ?? []))
         .catch(() => toast.error('Failed to load job types'));
+      fetchVehicleTypes({ status: 'active' })
+        .then((res) => setVehicleTypes(res.data?.data ?? []))
+        .catch(() => setVehicleTypes([]));
     }
   }, [open, company, loadRates, toast]);
 
@@ -113,6 +118,7 @@ export default function CompanyRates({ company, open, onClose }) {
         <RateForm
           companyId={company.id}
           jobTypes={jobTypes}
+          vehicleTypes={vehicleTypes}
           rate={editingRate}
           onCancel={() => {
             setShowForm(false);
@@ -130,6 +136,7 @@ export default function CompanyRates({ company, open, onClose }) {
           loading={loading}
           error={loadError}
           onRetry={loadRates}
+          showSrNo
           columns={[
             { key: 'jobType', label: 'Job Type' },
             { key: 'vehicleType', label: 'Vehicle Type' },
@@ -176,7 +183,7 @@ export default function CompanyRates({ company, open, onClose }) {
   );
 }
 
-function RateForm({ companyId, jobTypes, rate, onCancel, onSuccess }) {
+function RateForm({ companyId, jobTypes, vehicleTypes, rate, onCancel, onSuccess }) {
   const toast = useToast();
   const isEdit = Boolean(rate);
 
@@ -239,11 +246,17 @@ function RateForm({ companyId, jobTypes, rate, onCancel, onSuccess }) {
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Vehicle Type</label>
-          <input
+          <select
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            placeholder="e.g. Truck, Tipper"
             {...register('vehicleType')}
-          />
+          >
+            <option value="">Any / all types</option>
+            {vehicleTypes.map((vt) => (
+              <option key={vt.id} value={vt.name}>
+                {vt.name}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Rate Type *</label>

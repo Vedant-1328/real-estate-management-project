@@ -44,6 +44,7 @@ export const exportToCsv = (filename, columns, rows) => {
 export const MODULE_LABELS = {
   companies: 'Companies',
   job_types: 'Job Types',
+  vehicle_types: 'Vehicle Types',
   vehicles: 'Vehicles',
   drivers: 'Drivers',
   employees: 'Employees',

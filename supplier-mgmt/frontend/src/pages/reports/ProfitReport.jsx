@@ -65,26 +65,26 @@ export default function ProfitReport() {
         <table className="report-table w-full max-w-lg border-collapse text-sm">
           <tbody>
             <tr>
-              <td className="border border-slate-300 px-4 py-3 font-medium">Total Revenue</td>
-              <td className="border border-slate-300 px-4 py-3 text-green-700">
+              <td className="border border-slate-600/50 px-4 py-3 font-medium text-slate-100">Total Revenue</td>
+              <td className="border border-slate-600/50 px-4 py-3 text-emerald-300">
                 {formatCurrency(data.totalRevenue)}
               </td>
             </tr>
             <tr>
-              <td className="border border-slate-300 px-4 py-3 font-medium">Total Expenses</td>
-              <td className="border border-slate-300 px-4 py-3 text-red-700">
+              <td className="border border-slate-600/50 px-4 py-3 font-medium text-slate-100">Total Expenses</td>
+              <td className="border border-slate-600/50 px-4 py-3 text-rose-300">
                 {formatCurrency(data.totalExpenses)}
               </td>
             </tr>
             <tr>
-              <td className="border border-slate-300 px-4 py-3 font-medium">Outside Driver Cost</td>
-              <td className="border border-slate-300 px-4 py-3 text-red-700">
+              <td className="border border-slate-600/50 px-4 py-3 font-medium text-slate-100">Outside Driver Cost</td>
+              <td className="border border-slate-600/50 px-4 py-3 text-rose-300">
                 {formatCurrency(data.outsideDriverCost)}
               </td>
             </tr>
             <tr className="font-bold">
-              <td className="border border-slate-300 px-4 py-3">Net Profit</td>
-              <td className="border border-slate-300 px-4 py-3">
+              <td className="border border-slate-600/50 px-4 py-3 text-slate-100">Net Profit</td>
+              <td className="border border-slate-600/50 px-4 py-3 text-slate-100">
                 {formatCurrency(data.netProfit)}
               </td>
             </tr>

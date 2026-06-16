@@ -16,6 +16,7 @@ const HomePage = lazyNamed(() => import('./pages/home/index.js'), 'HomePage');
 const CompanyList = lazyNamed(() => import('./pages/companies/index.js'), 'CompanyList');
 const ExpenseTypeList = lazyNamed(() => import('./pages/expenseTypes/index.js'), 'ExpenseTypeList');
 const JobTypeList = lazyNamed(() => import('./pages/jobTypes/index.js'), 'JobTypeList');
+const VehicleTypeList = lazyNamed(() => import('./pages/vehicleTypes/index.js'), 'VehicleTypeList');
 const SiteList = lazyNamed(() => import('./pages/sites/index.js'), 'SiteList');
 const VehicleList = lazyNamed(() => import('./pages/vehicles/index.js'), 'VehicleList');
 const DriverList = lazyNamed(() => import('./pages/drivers/index.js'), 'DriverList');
@@ -75,6 +76,7 @@ function App() {
 
                   <Route path="/companies" element={<CompanyList />} />
                   <Route path="/job-types" element={<JobTypeList />} />
+                  <Route path="/vehicle-types" element={<VehicleTypeList />} />
                   <Route path="/vehicles" element={<VehicleList />} />
                   <Route path="/drivers" element={<DriverList />} />
                   <Route path="/employees" element={<EmployeeList />} />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchCompanies } from '../../api/companies.js';
 import { deleteEodEntry, fetchEodEntries } from '../../api/eodEntries.js';
 import Button from '../../components/Button.jsx';
@@ -8,6 +8,7 @@ import { useConfirm } from '../../components/ConfirmDialog.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { usePermission } from '../../hooks/usePermission.js';
 import { formatCurrency, formatDate } from '../../utils/formatters.js';
+import { formatEodQuantity } from '../../utils/eodBilling.js';
 import { exportToCsv } from '../../utils/reportHelpers.js';
 import EodForm from './EodForm.jsx';
 
@@ -19,7 +20,7 @@ const EOD_EXPORT_COLUMNS = [
   { key: 'jobType', label: 'Job Type' },
   { key: 'company', label: 'Company' },
   { key: 'trips', label: 'Trips' },
-  { key: 'amount', label: 'Amount' },
+  { key: 'loadedBy', label: 'Loaded by' },
   { key: 'billingStatus', label: 'Billing' },
   { key: 'approved', label: 'Approved' },
   { key: 'endTime', label: 'End Time' },
@@ -34,8 +35,8 @@ const buildEodExportRows = (entries) =>
     vehicle: e.vehicleLabel || '',
     jobType: e.jobType?.name || '',
     company: e.company?.companyName || '',
-    trips: e.actualTrips ?? '',
-    amount: e.totalAmount ?? '',
+    trips: formatEodQuantity(e.actualTrips, e.billingUnit || 'trips'),
+    loadedBy: e.loadedByLabel || '',
     billingStatus: e.billingStatus === 'invoiced' ? 'Invoiced' : 'Pending',
     approved: e.isApproved ? 'Yes' : 'No',
     endTime: e.endTime || '',
@@ -43,6 +44,25 @@ const buildEodExportRows = (entries) =>
   }));
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+const entrySearchHaystack = (e) =>
+  [
+    e.date,
+    formatDate(e.date),
+    e.routeLabel,
+    e.driverLabel,
+    e.vehicleLabel,
+    e.jobType?.name,
+    e.company?.companyName,
+    e.loadedByLabel,
+    e.remarks,
+    e.billingStatus,
+    e.isApproved ? 'approved' : 'pending',
+    e.actualTrips != null ? String(e.actualTrips) : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
 const monthStart = () => {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
@@ -73,24 +93,6 @@ function ApprovedBadge({ approved }) {
   );
 }
 
-function truncateText(text, max = 48) {
-  if (!text?.trim()) return null;
-  const value = text.trim();
-  return value.length > max ? `${value.slice(0, max)}…` : value;
-}
-
-function RemarksCell({ remarks }) {
-  if (!remarks?.trim()) {
-    return <span className="text-slate-400">—</span>;
-  }
-  const preview = truncateText(remarks, 48);
-  return (
-    <span className="block max-w-[12rem] truncate text-sm text-slate-700" title={remarks.trim()}>
-      {preview}
-    </span>
-  );
-}
-
 function DetailRow({ label, children }) {
   return (
     <div className="grid grid-cols-[7rem_1fr] gap-2 text-sm">
@@ -115,9 +117,14 @@ function EodDetailModal({ entry, open, onClose, onEdit, canEdit }) {
         <DetailRow label="Route">{entry.routeLabel || '—'}</DetailRow>
         <DetailRow label="Driver">{entry.driverLabel || '—'}</DetailRow>
         <DetailRow label="Vehicle">{entry.vehicleLabel || '—'}</DetailRow>
+        {entry.loadedByLabel && (
+          <DetailRow label="Loaded by">{entry.loadedByLabel}</DetailRow>
+        )}
         <DetailRow label="Job type">{entry.jobType?.name || '—'}</DetailRow>
         <DetailRow label="Company">{entry.company?.companyName || '—'}</DetailRow>
-        <DetailRow label="Trips">{entry.actualTrips ?? '—'}</DetailRow>
+        <DetailRow label={entry.quantityLabel || 'Trips'}>
+          {formatEodQuantity(entry.actualTrips, entry.billingUnit || 'trips')}
+        </DetailRow>
         <DetailRow label="Amount">{formatCurrency(entry.totalAmount)}</DetailRow>
         <DetailRow label="Billing">
           <BillingBadge status={entry.billingStatus} />
@@ -183,6 +190,7 @@ export default function EodList() {
   const [to, setTo] = useState(today());
   const [companyId, setCompanyId] = useState('all');
   const [billingStatus, setBillingStatus] = useState('all');
+  const [search, setSearch] = useState('');
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -215,17 +223,31 @@ export default function EodList() {
     }
   }, [from, to, companyId, billingStatus, toast]);
 
+  const filteredEntries = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return entries;
+    return entries.filter((e) => entrySearchHaystack(e).includes(q));
+  }, [entries, search]);
+
   useEffect(() => {
     const t = setTimeout(load, 200);
     return () => clearTimeout(t);
   }, [load]);
 
   const handleExportCsv = () => {
-    if (!entries.length) {
-      toast.error('No EOD entries to export for the selected filters');
+    if (!filteredEntries.length) {
+      toast.error(
+        search.trim()
+          ? 'No matching entries to export'
+          : 'No EOD entries to export for the selected filters'
+      );
       return;
     }
-    exportToCsv(`eod-entries-${from}-to-${to}.csv`, EOD_EXPORT_COLUMNS, buildEodExportRows(entries));
+    exportToCsv(
+      `eod-entries-${from}-to-${to}.csv`,
+      EOD_EXPORT_COLUMNS,
+      buildEodExportRows(filteredEntries)
+    );
     toast.success('EOD data exported');
   };
 
@@ -248,6 +270,16 @@ export default function EodList() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm">
+        <div className="min-w-[200px] flex-1 basis-full sm:basis-auto">
+          <label className="mb-1 block text-xs text-slate-600">Search</label>
+          <input
+            type="search"
+            placeholder="Driver, vehicle, route, company, loaded by…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          />
+        </div>
         <div>
           <label className="mb-1 block text-xs text-slate-600">From</label>
           <input
@@ -311,6 +343,18 @@ export default function EodList() {
         </div>
       </div>
 
+      {!loading && !loadError && entries.length > 0 && search.trim() && filteredEntries.length === 0 && (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-8 text-center">
+          <p className="text-sm font-medium text-slate-700">No entries match your search</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Try another term or clear the search box.
+          </p>
+          <Button variant="secondary" className="mt-3" onClick={() => setSearch('')}>
+            Clear search
+          </Button>
+        </div>
+      )}
+
       {!loading && !loadError && entries.length === 0 && (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
           <p className="text-sm font-medium text-slate-700">No EOD entries for this period</p>
@@ -332,11 +376,16 @@ export default function EodList() {
         </div>
       )}
 
-      {(loading || loadError || entries.length > 0) && (
+      {(loading || loadError || filteredEntries.length > 0) && (
       <Table
             loading={loading}
             error={loadError}
             onRetry={load}
+            emptyMessage={
+              search.trim()
+                ? 'No entries match your search. Try a different term or clear the search.'
+                : 'No EOD entries for this period'
+            }
           columns={[
             { key: 'date', label: 'Date' },
             { key: 'routeLabel', label: 'Route' },
@@ -344,24 +393,23 @@ export default function EodList() {
             { key: 'vehicleLabel', label: 'Vehicle' },
             { key: 'jobType', label: 'Job Type' },
             { key: 'company', label: 'Company' },
-            { key: 'actualTrips', label: 'Trips' },
-            { key: 'totalAmount', label: 'Amount' },
+            { key: 'actualTrips', label: 'Trips / Hrs' },
+            { key: 'loadedBy', label: 'Loaded by' },
             { key: 'billingStatus', label: 'Billing' },
             { key: 'approved', label: 'Approved' },
-            { key: 'remarks', label: 'Remarks' },
             { key: 'actions', label: '' },
           ]}
-          data={entries.map((e) => ({
+          data={filteredEntries.map((e) => ({
             ...e,
             date: formatDate(e.date),
             routeLabel: e.routeLabel || '—',
             company: e.company?.companyName || '—',
             jobType: e.jobType?.name || '—',
-            actualTrips: e.actualTrips ?? '—',
-            totalAmount: formatCurrency(e.totalAmount),
+            jobType: e.jobType?.name || '—',
+            actualTrips: formatEodQuantity(e.actualTrips, e.billingUnit || 'trips'),
+            loadedBy: e.loadedByLabel || '—',
             billingStatus: <BillingBadge status={e.billingStatus} />,
             approved: <ApprovedBadge approved={e.isApproved} />,
-            remarks: <RemarksCell remarks={e.remarks} />,
             actions: (
               <div className="flex gap-2">
                 <button
@@ -397,6 +445,17 @@ export default function EodList() {
           }))}
         />
       )}
+
+      <EodDetailModal
+        entry={viewing}
+        open={Boolean(viewing)}
+        onClose={() => setViewing(null)}
+        canEdit={canEdit}
+        onEdit={(entry) => {
+          setEditing(entry);
+          setFormOpen(true);
+        }}
+      />
 
       <EodDetailModal
         entry={viewing}

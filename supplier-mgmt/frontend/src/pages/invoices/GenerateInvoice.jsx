@@ -9,6 +9,7 @@ import Table from '../../components/Table.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { usePermission } from '../../hooks/usePermission.js';
 import { formatCurrency, formatDate } from '../../utils/formatters.js';
+import { formatEodQuantity } from '../../utils/eodBilling.js';
 
 function calcLineAmount(entry, rate) {
   const trips = Number(entry.actualTrips) || 0;
@@ -468,7 +469,7 @@ export default function GenerateInvoice() {
                 { key: 'vehicleNumber', label: 'Vehicle' },
                 { key: 'driverName', label: 'Driver' },
                 { key: 'route', label: 'From → To' },
-                { key: 'actualTrips', label: 'Trips' },
+                { key: 'actualTrips', label: 'Trips / Hrs' },
                 { key: 'rate', label: 'Rate (₹)' },
                 { key: 'amount', label: 'Amount' },
               ]}
@@ -499,6 +500,7 @@ export default function GenerateInvoice() {
                   amount: formatCurrency(
                     line.amount !== '' && line.amount != null ? Number(line.amount) : e.amount || 0
                   ),
+                  actualTrips: formatEodQuantity(e.actualTrips, e.billingUnit || 'trips'),
                   ...e,
                 };
               })}

@@ -1,21 +1,12 @@
+/** Sidebar order: Dashboard → Operations → Billings → Salary → Reports → Masters → Settings */
 export const navSections = [
   {
+    order: 0,
     label: null,
     items: [{ to: '/dashboard', label: 'Dashboard', icon: 'dashboard', end: true }],
   },
   {
-    label: 'Masters',
-    items: [
-      { to: '/companies', label: 'Companies', icon: 'building' },
-      { to: '/job-types', label: 'Job Types', icon: 'briefcase' },
-      { to: '/vehicles', label: 'Vehicles', icon: 'truck' },
-      { to: '/drivers', label: 'Drivers', icon: 'user' },
-      { to: '/employees', label: 'Employees', icon: 'users' },
-      { to: '/sites', label: 'Sites', icon: 'map' },
-      { to: '/expense-types', label: 'Expense Types', icon: 'tag' },
-    ],
-  },
-  {
+    order: 1,
     label: 'Operations',
     items: [
       { to: '/eod-entries', label: 'EOD Entries', icon: 'check' },
@@ -24,13 +15,15 @@ export const navSections = [
     ],
   },
   {
-    label: 'Billing',
+    order: 2,
+    label: 'Billings',
     items: [
       { to: '/invoices', label: 'Invoices', icon: 'file' },
       { to: '/payments', label: 'Payments', icon: 'credit' },
     ],
   },
   {
+    order: 3,
     label: 'Salary',
     items: [
       { to: '/driver-advances', label: 'Driver Advances', icon: 'cash' },
@@ -40,11 +33,12 @@ export const navSections = [
     ],
   },
   {
+    order: 4,
     label: 'Reports',
     items: [
       { to: '/reports/daily-job', label: 'Daily Job', icon: 'chart' },
-      { to: '/reports/vehicle', label: 'Vehicle', icon: 'chart' },
       { to: '/reports/driver', label: 'Driver', icon: 'chart' },
+      { to: '/reports/vehicle', label: 'Vehicle', icon: 'chart' },
       { to: '/reports/company-billing', label: 'Company Billing', icon: 'chart' },
       { to: '/reports/expense', label: 'Expense', icon: 'chart' },
       { to: '/reports/profit', label: 'Profit', icon: 'chart' },
@@ -52,6 +46,21 @@ export const navSections = [
     ],
   },
   {
+    order: 5,
+    label: 'Masters',
+    items: [
+      { to: '/companies', label: 'Companies', icon: 'building' },
+      { to: '/sites', label: 'Sites', icon: 'map' },
+      { to: '/job-types', label: 'Job Types', icon: 'briefcase' },
+      { to: '/vehicle-types', label: 'Vehicle Types', icon: 'tag' },
+      { to: '/vehicles', label: 'Vehicles', icon: 'truck' },
+      { to: '/drivers', label: 'Drivers', icon: 'user' },
+      { to: '/employees', label: 'Employees', icon: 'users' },
+      { to: '/expense-types', label: 'Expense Types', icon: 'tag' },
+    ],
+  },
+  {
+    order: 6,
     label: 'Settings',
     settingsOnly: true,
     items: [
@@ -59,4 +68,4 @@ export const navSections = [
       { to: '/roles', label: 'Roles & Permissions', icon: 'shield' },
     ],
   },
-];
+].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));

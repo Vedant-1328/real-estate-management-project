@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
 import { CompanyJobRate, JobType } from '../models/index.js';
+import { getPreferredRateType } from './eodBilling.js';
 
 /**
  * Returns the applicable rate for a job assignment:
@@ -9,6 +10,7 @@ export const getEffectiveRate = async ({
   companyId,
   jobTypeId,
   vehicleType = null,
+  rateType = null,
   asOfDate = new Date().toISOString().slice(0, 10),
 }) => {
   const where = {
@@ -23,6 +25,9 @@ export const getEffectiveRate = async ({
 
   if (vehicleType) {
     where.vehicleType = vehicleType;
+  }
+  if (rateType) {
+    where.rateType = rateType;
   }
 
   const rate = await CompanyJobRate.findOne({
@@ -50,4 +55,33 @@ export const formatRate = (rate) => {
     rateAmount: Number(plain.rateAmount),
     rateTypeLabel: RATE_TYPE_LABELS[plain.rateType] || plain.rateType,
   };
+};
+
+/** Resolve company rate for EOD billing (per-hour for JCB, else best match). */
+export const resolveEodBillingRate = async ({
+  companyId,
+  jobTypeId,
+  vehicleType = null,
+  vehicleTypeBillingUnit = null,
+  quantityUnit = null,
+  asOfDate,
+}) => {
+  const preferred = getPreferredRateType(vehicleType, vehicleTypeBillingUnit, quantityUnit);
+
+  let rate = await getEffectiveRate({
+    companyId,
+    jobTypeId,
+    vehicleType,
+    rateType: preferred,
+    asOfDate,
+  });
+  if (!rate && preferred) {
+    rate = await getEffectiveRate({
+      companyId,
+      jobTypeId,
+      vehicleType,
+      asOfDate,
+    });
+  }
+  return rate;
 };

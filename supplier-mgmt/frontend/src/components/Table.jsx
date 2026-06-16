@@ -56,6 +56,8 @@ function ErrorState({ colSpan, message, onRetry }) {
   );
 }
 
+const SR_COLUMN = { key: '_srNo', label: 'Sr.' };
+
 export default function Table({
   columns = [],
   data = [],
@@ -64,30 +66,46 @@ export default function Table({
   onRetry,
   emptyMessage = 'No records found',
   embedded = false,
+  showSrNo = false,
+  srStart = 1,
 }) {
-  const colSpan = columns.length || 1;
+  const displayColumns = showSrNo ? [SR_COLUMN, ...columns] : columns;
+  const displayData = showSrNo
+    ? data.map((row, i) => ({
+        ...row,
+        _srNo: (
+          <span className="tabular-nums font-medium text-slate-600">{srStart + i}</span>
+        ),
+      }))
+    : data;
+
+  const colSpan = displayColumns.length || 1;
 
   const table = (
     <table className="table-premium min-w-full text-sm">
       <thead>
         <tr>
-          {columns.map((col) => (
-            <th key={col.key}>{col.label}</th>
+          {displayColumns.map((col) => (
+            <th key={col.key} className={col.key === '_srNo' ? 'w-14' : undefined}>
+              {col.label}
+            </th>
           ))}
         </tr>
       </thead>
       {loading ? (
-        <TableSkeleton columns={columns} />
+        <TableSkeleton columns={displayColumns} />
       ) : error ? (
         <ErrorState colSpan={colSpan} message={error} onRetry={onRetry} />
       ) : data.length === 0 ? (
         <EmptyState colSpan={colSpan} message={emptyMessage} />
       ) : (
         <tbody className="bg-white">
-          {data.map((row, i) => (
+          {displayData.map((row, i) => (
             <tr key={row.id ?? row._key ?? i}>
-              {columns.map((col) => (
-                <td key={col.key}>{row[col.key]}</td>
+              {displayColumns.map((col) => (
+                <td key={col.key} className={col.key === '_srNo' ? 'text-center' : undefined}>
+                  {row[col.key]}
+                </td>
               ))}
             </tr>
           ))}

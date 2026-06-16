@@ -9,6 +9,7 @@ import {
   JobType,
   Site,
   Vehicle,
+  VehicleType,
 } from '../models/index.js';
 import { hardDestroy, hardDestroyWhere } from '../utils/hardDestroy.js';
 import {
@@ -16,13 +17,20 @@ import {
   findAssignmentConflicts,
   hasConflict,
 } from '../utils/assignmentConflict.js';
-import { formatRate, getEffectiveRate } from '../utils/companyRates.js';
+import { formatRate, resolveEodBillingRate } from '../utils/companyRates.js';
 import { hasPermission } from '../utils/permissions.js';
 
 const assignmentIncludes = [
   { model: Company, as: 'company', attributes: ['id', 'companyName'] },
   { model: JobType, as: 'jobType', attributes: ['id', 'name'] },
-  { model: Vehicle, as: 'vehicle', attributes: ['id', 'vehicleNumber', 'vehicleType'] },
+  {
+    model: Vehicle,
+    as: 'vehicle',
+    attributes: ['id', 'vehicleNumber', 'vehicleType', 'vehicleTypeId'],
+    include: [
+      { model: VehicleType, as: 'vehicleTypeRef', attributes: ['id', 'name', 'billingUnit'] },
+    ],
+  },
   { model: Driver, as: 'driver', attributes: ['id', 'name', 'mobile'] },
   { model: Driver, as: 'replacedDriver', attributes: ['id', 'name', 'mobile'] },
   { model: Site, as: 'fromSite', attributes: ['id', 'siteName', 'companyId'] },
@@ -108,17 +116,24 @@ const validateAssignmentRefs = async (payload, { isOutside }) => {
 
 const resolveCompanyRate = async (payload) => {
   let vehicleType = null;
+  let vehicleTypeBillingUnit = null;
   if (payload.vehicleId) {
     const vehicle = await Vehicle.findByPk(payload.vehicleId, {
-      attributes: ['vehicleType'],
+      attributes: ['vehicleType', 'vehicleTypeId'],
+      include: [
+        { model: VehicleType, as: 'vehicleTypeRef', attributes: ['billingUnit'] },
+      ],
     });
     vehicleType = vehicle?.vehicleType ?? null;
+    vehicleTypeBillingUnit = vehicle?.vehicleTypeRef?.billingUnit ?? null;
   }
 
-  const rate = await getEffectiveRate({
+  const rate = await resolveEodBillingRate({
     companyId: payload.companyId,
     jobTypeId: payload.jobTypeId,
     vehicleType,
+    vehicleTypeBillingUnit,
+    quantityUnit: null,
     asOfDate: payload.assignmentDate,
   });
 
@@ -161,12 +176,23 @@ const loadAssignment = async (id) =>
   JobAssignment.findByPk(id, { include: assignmentIncludes });
 
 export const getEffectiveRateForAssignment = async (req, res) => {
-  const { companyId, jobTypeId, assignmentDate, vehicleType } = req.query;
+  const { companyId, jobTypeId, assignmentDate, vehicleType, quantityUnit } = req.query;
 
-  const rate = await getEffectiveRate({
+  let vehicleTypeBillingUnit = null;
+  if (vehicleType) {
+    const vt = await VehicleType.findOne({
+      where: { name: String(vehicleType).trim() },
+      attributes: ['billingUnit'],
+    });
+    vehicleTypeBillingUnit = vt?.billingUnit ?? null;
+  }
+
+  const rate = await resolveEodBillingRate({
     companyId,
     jobTypeId,
     vehicleType: vehicleType || null,
+    vehicleTypeBillingUnit,
+    quantityUnit: quantityUnit || null,
     asOfDate: assignmentDate,
   });
 

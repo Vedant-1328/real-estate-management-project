@@ -10,9 +10,11 @@ import {
   Payment,
   Site,
   Vehicle,
+  VehicleType,
   sequelize,
 } from '../models/index.js';
 import { calculateEodTotal, isOutsideEodEntry } from '../utils/eodCalculations.js';
+import { getEodBillingUnit, quantityLabelForUnit } from '../utils/eodBilling.js';
 import { calculateInvoiceTotals } from '../utils/invoiceCalculations.js';
 import { generateInvoiceNumber } from '../utils/invoiceNumber.js';
 import { sortInvoiceItemsByDate } from '../utils/encryptedAggregates.js';
@@ -96,7 +98,14 @@ const formatInvoice = (invoice) => {
 const eodInclude = [
   { model: Company, as: 'company', attributes: ['id', 'companyName'] },
   { model: JobType, as: 'jobType', attributes: ['id', 'name'] },
-  { model: Vehicle, as: 'vehicle', attributes: ['id', 'vehicleNumber'] },
+  {
+    model: Vehicle,
+    as: 'vehicle',
+    attributes: ['id', 'vehicleNumber', 'vehicleType', 'vehicleTypeId'],
+    include: [
+      { model: VehicleType, as: 'vehicleTypeRef', attributes: ['billingUnit'] },
+    ],
+  },
   { model: Driver, as: 'driver', attributes: ['id', 'name'] },
   { model: Site, as: 'fromSite', attributes: ['id', 'siteName', 'companyId'] },
   { model: Site, as: 'toSite', attributes: ['id', 'siteName', 'companyId'] },
@@ -158,6 +167,11 @@ export const getPendingEod = async (req, res) => {
     data: filtered.map((e) => {
       const plain = e.get({ plain: true });
       const linkedCompanyId = effectiveEodCompanyId(plain);
+      const billingUnit = getEodBillingUnit(
+        plain.vehicle?.vehicleType,
+        plain.vehicle?.vehicleTypeRef?.billingUnit ?? null,
+        plain.quantityUnit ?? null
+      );
       return {
         id: plain.id,
         date: plain.date,
@@ -167,6 +181,8 @@ export const getPendingEod = async (req, res) => {
         driverName: driverLabel(plain.driver, plain.assignment),
         fromSite: siteLabel(plain.fromSite, plain.assignment, 'from'),
         toSite: siteLabel(plain.toSite, plain.assignment, 'to'),
+        billingUnit,
+        quantityLabel: quantityLabelForUnit(billingUnit),
         actualTrips: plain.actualTrips,
         ratePerTrip: plain.ratePerTrip != null ? Number(plain.ratePerTrip) : null,
         extraCharges: plain.extraCharges != null ? Number(plain.extraCharges) : 0,

@@ -51,7 +51,7 @@ export default function DashboardLayout() {
           {sections.map((section) => (
             <div key={section.label ?? 'home'} className="mb-5">
               {section.label && (
-                <p className="mb-2 hidden px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 lg:block">
+                <p className="sidebar-section-label mb-2 hidden px-3 text-[10px] font-bold uppercase tracking-[0.14em] lg:block">
                   {section.label}
                 </p>
               )}
@@ -65,11 +65,11 @@ export default function DashboardLayout() {
                       to={item.to}
                       end={item.end}
                       title={item.label}
-                      className={({ isActive }) =>
+                        className={({ isActive }) =>
                         `flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium transition-all duration-200 lg:px-3 ${
                           isActive
-                            ? 'sidebar-nav-active text-white'
-                            : 'text-slate-400 hover:bg-white/8 hover:text-white'
+                            ? 'sidebar-nav-active'
+                            : 'sidebar-nav-link'
                         } justify-center px-2 lg:justify-start`
                       }
                     >
@@ -84,8 +84,8 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="hidden border-t border-white/10 p-4 lg:block">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">Operations</p>
-          <p className="mt-1 text-xs text-slate-400">Earth movers management</p>
+          <p className="sidebar-section-label text-[10px] font-medium uppercase tracking-wider">Operations</p>
+          <p className="mt-1 text-xs text-slate-300">Earth movers management</p>
         </div>
       </aside>
 

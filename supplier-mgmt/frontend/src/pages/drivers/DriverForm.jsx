@@ -27,7 +27,7 @@ const schema = z.object({
   name: z.string().min(1, 'Name is required'),
   mobile: z.string().min(1, 'Mobile is required'),
   address: z.string().optional(),
-  licenseNumber: z.string().min(1, 'License number is required'),
+  licenseNumber: z.string().optional(),
   driverType: z.enum(['own', 'outside']),
   defaultVehicleId: z.string().optional(),
   status: z.enum(['available', 'assigned', 'inactive']),
@@ -106,6 +106,7 @@ export default function DriverForm({ driver, onSuccess, onCancel }) {
     const payload = {
       ...values,
       address: values.address || null,
+      licenseNumber: values.licenseNumber?.trim() || null,
       defaultVehicleId: values.defaultVehicleId ? Number(values.defaultVehicleId) : null,
       grossSalary: values.grossSalary === '' || values.grossSalary == null ? null : Number(values.grossSalary),
       notes: values.notes || null,
@@ -188,9 +189,7 @@ export default function DriverForm({ driver, onSuccess, onCancel }) {
           <textarea rows={2} className="input-field" {...register('address')} />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            License Number <span className="text-red-500">*</span>
-          </label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">License Number</label>
           <input className="input-field" {...register('licenseNumber')} />
           {err('licenseNumber')}
         </div>

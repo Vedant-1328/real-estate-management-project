@@ -81,34 +81,240 @@ body {
   background-size: 64px 64px;
 }
 
-/* Page titles on dark canvas */
-.app-main-canvas h1.text-slate-900,
-.app-main-canvas h2.text-slate-900 {
+/* ── Contrast: dark canvas = light text, white panels = dark text ── */
+
+.app-main-canvas {
+  color: #e2e8f0;
+}
+
+/* Default ink on dark background (Tailwind slate utilities) */
+.app-main-canvas :where(.text-slate-900) {
+  color: #f8fafc;
+}
+.app-main-canvas :where(.text-slate-800) {
   color: #f1f5f9;
 }
-
-.app-main-canvas > * > .text-slate-600,
-.app-main-canvas > * > .text-slate-500 {
+.app-main-canvas :where(.text-slate-700) {
+  color: #e2e8f0;
+}
+.app-main-canvas :where(.text-slate-600) {
+  color: #cbd5e1;
+}
+.app-main-canvas :where(.text-slate-500) {
   color: #94a3b8;
 }
+.app-main-canvas :where(.text-slate-400) {
+  color: #94a3b8;
+}
+.app-main-canvas :where(.text-slate-300) {
+  color: #cbd5e1;
+}
 
-/* White surfaces keep dark text */
-.app-main-canvas .card-premium,
-.app-main-canvas .form-section,
-.app-main-canvas .billing-summary-bar {
+/* Light-surface roots (white / card panels) */
+:is(
+  .surface-light,
+  .app-main-canvas .bg-white,
+  .app-main-canvas [class*='bg-white'],
+  .app-main-canvas .card-premium,
+  .app-main-canvas .form-section,
+  .app-main-canvas .billing-summary-bar,
+  .app-main-canvas .table-premium tbody,
+  .app-main-canvas .input-field,
+  .app-main-canvas .btn-secondary,
+  .app-main-canvas fieldset.bg-white,
+  .app-main-canvas fieldset[class*='bg-white'],
+  .fixed .rounded-xl.bg-white,
+  .fixed .bg-white.shadow-xl
+) {
   color: #0f172a;
 }
 
-.app-main-canvas .card-premium .text-slate-900,
-.app-main-canvas .form-section .text-slate-900,
-.app-main-canvas .card-premium h1,
-.app-main-canvas .card-premium h2,
-.app-main-canvas .form-section h1,
-.app-main-canvas .form-section h2 {
+/* Dark ink on light surfaces (override canvas remap) */
+:is(
+  .surface-light,
+  .app-main-canvas .bg-white,
+  .app-main-canvas [class*='bg-white'],
+  .app-main-canvas .card-premium,
+  .app-main-canvas .form-section,
+  .app-main-canvas .billing-summary-bar,
+  .app-main-canvas .table-premium tbody,
+  .app-main-canvas .input-field,
+  .app-main-canvas .btn-secondary,
+  .app-main-canvas fieldset.bg-white,
+  .app-main-canvas fieldset[class*='bg-white'],
+  .fixed .rounded-xl.bg-white,
+  .fixed .bg-white.shadow-xl
+) :where(.text-slate-900) {
+  color: #0f172a !important;
+}
+:is(
+  .surface-light,
+  .app-main-canvas .bg-white,
+  .app-main-canvas [class*='bg-white'],
+  .app-main-canvas .card-premium,
+  .app-main-canvas .form-section,
+  .app-main-canvas .billing-summary-bar,
+  .app-main-canvas .table-premium tbody,
+  .app-main-canvas .input-field,
+  .app-main-canvas .btn-secondary,
+  .app-main-canvas fieldset.bg-white,
+  .app-main-canvas fieldset[class*='bg-white'],
+  .fixed .rounded-xl.bg-white,
+  .fixed .bg-white.shadow-xl
+) :where(.text-slate-800) {
+  color: #1e293b !important;
+}
+:is(
+  .surface-light,
+  .app-main-canvas .bg-white,
+  .app-main-canvas [class*='bg-white'],
+  .app-main-canvas .card-premium,
+  .app-main-canvas .form-section,
+  .app-main-canvas .billing-summary-bar,
+  .app-main-canvas .table-premium tbody,
+  .app-main-canvas .input-field,
+  .app-main-canvas .btn-secondary,
+  .app-main-canvas fieldset.bg-white,
+  .app-main-canvas fieldset[class*='bg-white'],
+  .fixed .rounded-xl.bg-white,
+  .fixed .bg-white.shadow-xl
+) :where(.text-slate-700) {
+  color: #334155 !important;
+}
+:is(
+  .surface-light,
+  .app-main-canvas .bg-white,
+  .app-main-canvas [class*='bg-white'],
+  .app-main-canvas .card-premium,
+  .app-main-canvas .form-section,
+  .app-main-canvas .billing-summary-bar,
+  .app-main-canvas .table-premium tbody,
+  .app-main-canvas .input-field,
+  .app-main-canvas .btn-secondary,
+  .app-main-canvas fieldset.bg-white,
+  .app-main-canvas fieldset[class*='bg-white'],
+  .fixed .rounded-xl.bg-white,
+  .fixed .bg-white.shadow-xl
+) :where(.text-slate-600) {
+  color: #475569 !important;
+}
+:is(
+  .surface-light,
+  .app-main-canvas .bg-white,
+  .app-main-canvas [class*='bg-white'],
+  .app-main-canvas .card-premium,
+  .app-main-canvas .form-section,
+  .app-main-canvas .billing-summary-bar,
+  .app-main-canvas .table-premium tbody,
+  .app-main-canvas .input-field,
+  .app-main-canvas .btn-secondary,
+  .app-main-canvas fieldset.bg-white,
+  .app-main-canvas fieldset[class*='bg-white'],
+  .fixed .rounded-xl.bg-white,
+  .fixed .bg-white.shadow-xl
+) :where(.text-slate-500) {
+  color: #64748b !important;
+}
+:is(
+  .surface-light,
+  .app-main-canvas .bg-white,
+  .app-main-canvas [class*='bg-white'],
+  .app-main-canvas .card-premium,
+  .app-main-canvas .form-section,
+  .app-main-canvas .billing-summary-bar,
+  .app-main-canvas .table-premium tbody,
+  .app-main-canvas .input-field,
+  .app-main-canvas .btn-secondary,
+  .app-main-canvas fieldset.bg-white,
+  .app-main-canvas fieldset[class*='bg-white'],
+  .fixed .rounded-xl.bg-white,
+  .fixed .bg-white.shadow-xl,
+  .fixed [class*='bg-white']
+) :where(.text-slate-400, .text-slate-300) {
+  color: #64748b !important;
+}
+
+:is(
+  .surface-light,
+  .app-main-canvas .bg-white,
+  .app-main-canvas [class*='bg-white'],
+  .app-main-canvas .card-premium,
+  .app-main-canvas .form-section,
+  .app-main-canvas .billing-summary-bar,
+  .app-main-canvas .table-premium tbody,
+  .app-main-canvas fieldset.bg-white,
+  .app-main-canvas fieldset[class*='bg-white'],
+  .fixed .rounded-xl.bg-white,
+  .fixed .bg-white.shadow-xl
+) :where(h1, h2, h3, h4) {
+  color: #0f172a;
+}
+
+/* Light gray panels on dark canvas (slate-50 / slate-100) */
+.app-main-canvas :is(.bg-slate-50, .bg-slate-100, [class*='bg-slate-50']) {
+  color: #0f172a;
+}
+.app-main-canvas :is(.bg-slate-50, .bg-slate-100, [class*='bg-slate-50']) :where(
+    .text-slate-900,
+    .text-slate-800,
+    .text-slate-700,
+    .text-slate-600
+  ) {
+  color: #334155 !important;
+}
+.app-main-canvas :is(.bg-slate-50, .bg-slate-100, [class*='bg-slate-50']) :where(.text-slate-500, .text-slate-400) {
+  color: #64748b !important;
+}
+
+/* Fixed overlays (modals, slide-overs, confirm dialogs) */
+.fixed :is(.bg-white, [class*='bg-white']) {
+  color: #0f172a;
+}
+.fixed :is(.bg-white, [class*='bg-white']) :where(
+    .text-slate-900,
+    .text-slate-800,
+    .text-slate-700,
+    .text-slate-600,
+    .text-slate-500
+  ) {
+  color: #334155 !important;
+}
+.fixed :is(.bg-white, [class*='bg-white']) :where(.text-slate-900) {
+  color: #0f172a !important;
+}
+.fixed :is(.bg-white, [class*='bg-white']) :where(h1, h2, h3, h4) {
+  color: #0f172a;
+}
+
+/* Table: dark header row, light body */
+.app-main-canvas .table-premium thead :where(.text-slate-300, .text-slate-400) {
+  color: #cbd5e1 !important;
+}
+
+/* Form labels on light panels */
+.app-main-canvas .form-section label,
+.app-main-canvas .bg-white label,
+.app-main-canvas fieldset.bg-white label {
+  color: #334155;
+}
+
+/* Selects/inputs inside filter bars */
+.app-main-canvas fieldset.bg-white select,
+.app-main-canvas fieldset.bg-white input:not([type='checkbox']):not([type='radio']),
+.app-main-canvas .bg-white select,
+.app-main-canvas .bg-white input:not([type='checkbox']):not([type='radio']) {
   color: #0f172a;
 }
 
 /* ── Login / auth pages ─────────────────────────────────────────── */
+.auth-shell {
+  color: #f1f5f9;
+}
+
+.auth-shell .text-slate-400 {
+  color: #cbd5e1 !important;
+}
+
 .auth-shell__base {
   position: absolute;
   inset: 0;
@@ -199,7 +405,7 @@ body {
   margin-bottom: 0.4rem;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #cbd5e1;
+  color: #f8fafc;
 }
 
 .auth-input {
@@ -225,17 +431,19 @@ body {
 
 .auth-alert {
   border-radius: 0.75rem;
-  border: 1px solid rgba(244, 63, 94, 0.4);
-  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid #fca5a5;
+  background: #991b1b;
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  color: #fda4af;
+  font-weight: 500;
+  line-height: 1.5;
+  color: #ffffff;
 }
 
 .auth-error {
   margin-top: 0.25rem;
   font-size: 0.75rem;
-  color: #fb7185;
+  color: #fecdd3;
 }
 
 .auth-btn-signin {
@@ -267,22 +475,55 @@ body {
 
 /* Sidebar depth */
 .sidebar-premium {
+  color: #e2e8f0;
   background: linear-gradient(175deg, #0c1222 0%, #111827 45%, #0f172a 100%);
   box-shadow: 4px 0 24px rgba(15, 23, 42, 0.25);
 }
 
+.sidebar-premium .sidebar-section-label,
+.sidebar-premium :where(.text-slate-500, .text-slate-300) {
+  color: #94a3b8 !important;
+}
+
+.sidebar-premium .text-slate-300 {
+  color: #cbd5e1 !important;
+}
+
+.sidebar-premium .sidebar-nav-link {
+  color: #e2e8f0 !important;
+}
+
+.sidebar-premium .sidebar-nav-link:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-premium .sidebar-nav-link svg {
+  color: inherit;
+}
+
 .sidebar-nav-active {
+  color: #ffffff !important;
   background: linear-gradient(90deg, rgba(245, 158, 11, 0.18) 0%, rgba(245, 158, 11, 0.06) 100%);
   box-shadow: inset 3px 0 0 0 #f59e0b;
 }
 
+.sidebar-nav-active svg {
+  color: inherit;
+}
+
 /* Top bar — matches dark shell */
 .glass-header {
+  color: #e2e8f0;
   background: rgba(10, 14, 26, 0.94);
   border-bottom: 1px solid rgba(34, 211, 238, 0.14);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.04) inset,
     0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.glass-header :where(.text-slate-400) {
+  color: #94a3b8;
 }
 
 .btn-header-ghost {
@@ -413,6 +654,30 @@ body {
   .table-premium tbody td {
     @apply border-b border-slate-100/80 px-4 py-3 text-slate-700;
   }
+}
+
+/* Report tables: light header/footer rows, dark data rows */
+.app-main-canvas .report-table thead th,
+.app-main-canvas .report-table tfoot td {
+  color: #0f172a !important;
+}
+
+.app-main-canvas .report-page .report-table tbody td {
+  color: #f8fafc;
+  border-color: rgba(100, 116, 139, 0.45);
+  background: rgba(15, 23, 42, 0.75);
+}
+
+.app-main-canvas .report-page .report-table tbody tr:hover td {
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.app-main-canvas .report-page .report-table thead th {
+  border-color: rgba(100, 116, 139, 0.5);
+}
+
+.app-main-canvas .report-page > header .text-slate-600 {
+  color: #94a3b8;
 }
 
 @media print {

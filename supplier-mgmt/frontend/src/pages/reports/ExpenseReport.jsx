@@ -151,10 +151,10 @@ export default function ExpenseReport() {
             <tbody>
               {grouped.map((g, i) => (
                 <tr key={i}>
-                  <td className="border border-slate-300 px-3 py-2">{g.expenseType}</td>
-                  <td className="border border-slate-300 px-3 py-2">{g.vehicle}</td>
-                  <td className="border border-slate-300 px-3 py-2">{g.count}</td>
-                  <td className="border border-slate-300 px-3 py-2">{g.total}</td>
+                  <td className="border border-slate-600/50 px-3 py-2 text-slate-100">{g.expenseType}</td>
+                  <td className="border border-slate-600/50 px-3 py-2 text-slate-100">{g.vehicle}</td>
+                  <td className="border border-slate-600/50 px-3 py-2 text-slate-100">{g.count}</td>
+                  <td className="border border-slate-600/50 px-3 py-2 text-slate-100">{g.total}</td>
                 </tr>
               ))}
             </tbody>
@@ -171,8 +171,8 @@ export default function ExpenseReport() {
             <tbody>
               {monthly.map((m) => (
                 <tr key={m.month}>
-                  <td className="border border-slate-300 px-3 py-2">{m.month}</td>
-                  <td className="border border-slate-300 px-3 py-2">{m.total}</td>
+                  <td className="border border-slate-600/50 px-3 py-2 text-slate-100">{m.month}</td>
+                  <td className="border border-slate-600/50 px-3 py-2 text-slate-100">{m.total}</td>
                 </tr>
               ))}
             </tbody>
