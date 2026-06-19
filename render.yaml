@@ -1,0 +1,58 @@
+# Render Blueprint — deploy from GitHub: Dashboard → New → Blueprint → connect repo
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: shree-sai-earth-movers
+    runtime: docker
+    dockerfilePath: ./supplier-mgmt/Dockerfile
+    dockerContext: ./supplier-mgmt
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: FRONTEND_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: SUPPLIER_COMPANY_NAME
+        value: SHREE SAI EARTH MOVERS
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: FIELD_ENCRYPTION_ENABLED
+        value: "true"
+      - key: DB_HOST
+        fromDatabase:
+          name: supplier-mgmt-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: supplier-mgmt-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: supplier-mgmt-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: supplier-mgmt-db
+          property: user
+      - key: DB_PASS
+        fromDatabase:
+          name: supplier-mgmt-db
+          property: password
+
+databases:
+  - name: supplier-mgmt-db
+    plan: starter
+    databaseName: supplier_mgmt
+    user: supplier_app

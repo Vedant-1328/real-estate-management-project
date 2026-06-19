@@ -1,0 +1,47 @@
+# Self-hosted production stack (VPS with Docker installed)
+# Usage:
+#   cp backend/.env.production.example backend/.env   # fill in secrets
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml exec app npm run db:sync
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme_root}
+      MYSQL_DATABASE: supplier_mgmt
+      MYSQL_USER: supplier_app
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme_app}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-changeme_root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    env_file:
+      - backend/.env
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: supplier_mgmt
+      DB_USER: supplier_app
+      DB_PASS: ${MYSQL_PASSWORD:-changeme_app}
+    volumes:
+      - app_uploads:/app/backend/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+  app_uploads:
