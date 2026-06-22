@@ -1,0 +1,39 @@
+# Fly.io — run from supplier-mgmt folder: fly launch / fly deploy
+# MySQL is external (Railway MySQL, Aiven, PlanetScale, or your VPS).
+# Docs: https://fly.io/docs/languages-and-frameworks/node/
+
+app = 'shree-sai-earth-movers'
+primary_region = 'bom'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  NODE_ENV = 'production'
+  PORT = '3000'
+  FIELD_ENCRYPTION_ENABLED = 'true'
+  SUPPLIER_COMPANY_NAME = 'SHREE SAI EARTH MOVERS'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [[http_service.checks]]
+    grace_period = '45s'
+    interval = '30s'
+    method = 'GET'
+    path = '/api/health'
+    timeout = '5s'
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+
+[mounts]
+  source = 'uploads_data'
+  destination = '/app/backend/uploads'
